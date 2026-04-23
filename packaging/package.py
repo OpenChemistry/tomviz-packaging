@@ -137,6 +137,19 @@ def extract_archive(archive_path, dest_dir):
     return dest_dir
 
 
+def fix_qt_conf(env_dir):
+    """Fix qt6.conf to use relative paths instead of hardcoded build paths."""
+    for conf_name in ["qt6.conf", "qt.conf"]:
+        for subdir in ["bin", "Library/bin"]:
+            conf_path = os.path.join(env_dir, subdir, conf_name)
+            if os.path.exists(conf_path):
+                print(f"  Fixing {os.path.relpath(conf_path, env_dir)}")
+                with open(conf_path, "w") as f:
+                    f.write("[Paths]\n")
+                    f.write("Prefix = ..\n")
+                break
+
+
 def cleanup_conda_pack_files(env_dir):
     """Remove conda-pack leftover files that tomviz might pick up as operators."""
     for name in ["conda_unpack_progress.py", "conda-unpack"]:
@@ -166,6 +179,10 @@ def post_process_darwin(env_dir, tomviz_version):
 
     # Remove conda-pack leftovers that tomviz might scan
     cleanup_conda_pack_files(bundle_env_dir)
+
+    # Fix qt6.conf — conda-pack leaves hardcoded paths from the build machine.
+    # Replace with relative paths so Qt can find its plugins and resources.
+    fix_qt_conf(bundle_env_dir)
 
     # Create the launcher script
     launcher_path = os.path.join(macos_dir, "tomviz")
@@ -207,6 +224,9 @@ def post_process_linux(env_dir, tomviz_version):
     # Remove conda-pack leftovers
     cleanup_conda_pack_files(bundle_env_dir)
 
+    # Fix qt6.conf
+    fix_qt_conf(bundle_env_dir)
+
     # Create launcher script
     launcher_src = os.path.join(SCRIPT_DIR, "linux", "tomviz.sh")
     launcher_dst = os.path.join(install_dir, "tomviz")
@@ -233,6 +253,9 @@ def post_process_windows(env_dir, tomviz_version):
 
     # Remove conda-pack leftovers
     cleanup_conda_pack_files(bundle_env_dir)
+
+    # Fix qt6.conf
+    fix_qt_conf(bundle_env_dir)
 
     # Remove directories not needed at runtime that cause Windows path length
     # issues with WIX (deeply nested header files exceed 260 char limit)

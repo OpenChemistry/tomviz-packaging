@@ -472,13 +472,16 @@ jobs:
           cd packaging
           python verify.py _build/install/tomviz --python-version "$TOMVIZ_PYTHON_VERSION"
 
-      - name: Install xvfb
+      - name: Install xvfb and Mesa software renderer
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb mesa-utils
+          sudo apt-get install -y xvfb mesa-utils libegl-mesa0 libgl1-mesa-dri libglu1-mesa
 
       - name: Verify package (GUI smoke test with xvfb)
         continue-on-error: true
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          MESA_GL_VERSION_OVERRIDE: '3.3'
         run: |
           INSTALL_DIR="packaging/_build/install/tomviz"
 

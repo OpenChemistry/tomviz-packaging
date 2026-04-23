@@ -1,0 +1,434 @@
+name: Package Tomviz Installers
+
+on:
+  # Poll for new conda-forge releases every 6 hours
+  schedule:
+    - cron: '0 */6 * * *'
+
+  # Allow manual triggers
+  workflow_dispatch:
+    inputs:
+      tomviz_version:
+        description: 'Tomviz version to package (leave empty for latest)'
+        required: false
+      python_version:
+        description: 'Python version'
+        required: false
+        default: '3.13'
+      force:
+        description: 'Force rebuild even if version already released'
+        type: boolean
+        default: false
+
+env:
+  PYTHON_VERSION: ${{ github.event.inputs.python_version || '3.13' }}
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      tomviz_version: ${{ steps.check.outputs.tomviz_version }}
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for new version
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ github.event.inputs.tomviz_version }}
+          INPUT_FORCE: ${{ github.event.inputs.force }}
+        run: |
+          # Get the latest tomviz version from conda-forge
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION=$(python3 -c "
+          import urllib.request, json
+          url = 'https://conda.anaconda.org/conda-forge/linux-64/repodata.json'
+          data = json.loads(urllib.request.urlopen(url).read())
+          versions = set()
+          for name, info in {**data.get('packages', {}), **data.get('packages.conda', {})}.items():
+              if info.get('name') == 'tomviz':
+                  versions.add(info['version'])
+          def ver_key(v):
+              return tuple(int(x) for x in v.split('.') if x.isdigit())
+          print(sorted(versions, key=ver_key)[-1])
+          ")
+          fi
+
+          echo "Latest conda-forge version: $VERSION"
+          echo "tomviz_version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Check if we already have a release for this version
+          EXISTING=$(gh release view "v$VERSION" --json tagName 2>/dev/null || echo "")
+          if [ -n "$EXISTING" ] && [ "$INPUT_FORCE" != "true" ]; then
+            echo "Release v$VERSION already exists, skipping."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-macos-x64:
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: macos-13  # x64 runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: tomviz-package
+          conda-remove-defaults: 'true'
+
+      - name: Install packaging tools
+        shell: bash -el {0}
+        run: |
+          conda install -y -c conda-forge conda-pack cmake
+
+      - name: Build package
+        shell: bash -el {0}
+        env:
+          TOMVIZ_VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
+          cpack --config CPackConfig.cmake
+
+      - name: Verify package (structural)
+        shell: bash -el {0}
+        env:
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          APP_DIR=$(find _build/install -name "*.app" -type d | head -1)
+          python verify.py "$APP_DIR" --python-version "$TOMVIZ_PYTHON_VERSION"
+
+      - name: Verify package (smoke test via launcher)
+        run: |
+          APP_DIR=$(find packaging/_build/install -name "*.app" -type d | head -1)
+          "$APP_DIR/Contents/MacOS/tomviz" &
+          PID=$!
+          sleep 10
+
+          if kill -0 "$PID" 2>/dev/null; then
+            echo "OK: tomviz process $PID is running after 10s"
+            kill "$PID" || true
+            wait "$PID" 2>/dev/null || true
+          else
+            wait "$PID" 2>/dev/null
+            EXIT_CODE=$?
+            echo "FAIL: tomviz exited early with code $EXIT_CODE"
+            exit 1
+          fi
+
+      - name: Check artifact size
+        run: |
+          DMG=$(ls packaging/Tomviz-*.dmg 2>/dev/null | head -1)
+          if [ -z "$DMG" ]; then
+            echo "FAIL: No DMG found"
+            exit 1
+          fi
+          SIZE_MB=$(du -m "$DMG" | cut -f1)
+          echo "DMG size: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -lt 100 ]; then
+            echo "FAIL: DMG too small (${SIZE_MB} MB)"
+            exit 1
+          fi
+          echo "OK: DMG size is reasonable"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-macos-x64
+          path: packaging/Tomviz-*.dmg
+
+  build-macos-arm64:
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: macos-14  # arm64 runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: tomviz-package
+          conda-remove-defaults: 'true'
+
+      - name: Install packaging tools
+        shell: bash -el {0}
+        run: |
+          conda install -y -c conda-forge conda-pack cmake
+
+      - name: Build package
+        shell: bash -el {0}
+        env:
+          TOMVIZ_VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
+          cpack --config CPackConfig.cmake
+
+      - name: Verify package (structural)
+        shell: bash -el {0}
+        env:
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          APP_DIR=$(find _build/install -name "*.app" -type d | head -1)
+          python verify.py "$APP_DIR" --python-version "$TOMVIZ_PYTHON_VERSION"
+
+      - name: Verify package (smoke test via launcher)
+        run: |
+          APP_DIR=$(find packaging/_build/install -name "*.app" -type d | head -1)
+          "$APP_DIR/Contents/MacOS/tomviz" &
+          PID=$!
+          sleep 10
+
+          if kill -0 "$PID" 2>/dev/null; then
+            echo "OK: tomviz process $PID is running after 10s"
+            kill "$PID" || true
+            wait "$PID" 2>/dev/null || true
+          else
+            wait "$PID" 2>/dev/null
+            EXIT_CODE=$?
+            echo "FAIL: tomviz exited early with code $EXIT_CODE"
+            exit 1
+          fi
+
+      - name: Check artifact size
+        run: |
+          DMG=$(ls packaging/Tomviz-*.dmg 2>/dev/null | head -1)
+          if [ -z "$DMG" ]; then
+            echo "FAIL: No DMG found"
+            exit 1
+          fi
+          SIZE_MB=$(du -m "$DMG" | cut -f1)
+          echo "DMG size: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -lt 100 ]; then
+            echo "FAIL: DMG too small (${SIZE_MB} MB)"
+            exit 1
+          fi
+          echo "OK: DMG size is reasonable"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-macos-arm64
+          path: packaging/Tomviz-*.dmg
+
+  build-windows:
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: tomviz-package
+          conda-remove-defaults: 'true'
+
+      - name: Install packaging tools
+        shell: bash -el {0}
+        run: |
+          conda install -y -c conda-forge conda-pack cmake
+
+      - name: Build package
+        shell: bash -el {0}
+        env:
+          TOMVIZ_VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
+          cpack --config CPackConfig.cmake -G ZIP
+
+      - name: Verify package (structural)
+        shell: bash -el {0}
+        env:
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          python verify.py _build/install/tomviz --python-version "$TOMVIZ_PYTHON_VERSION"
+
+      - name: Verify package (smoke test via launcher)
+        shell: cmd
+        run: |
+          start "" "packaging\_build\install\tomviz\tomviz.bat"
+          timeout /t 10 /nobreak > nul
+
+          tasklist /FI "IMAGENAME eq tomviz.exe" | find "tomviz.exe" > nul
+          if %ERRORLEVEL% equ 0 (
+            echo OK: tomviz.exe is running after 10s
+            taskkill /IM tomviz.exe /F > nul 2>&1
+          ) else (
+            echo FAIL: tomviz.exe is not running after 10s
+            exit /b 1
+          )
+
+      - name: Check artifact size
+        shell: bash
+        run: |
+          ZIP=$(ls packaging/Tomviz-*.zip 2>/dev/null | head -1)
+          if [ -z "$ZIP" ]; then
+            echo "FAIL: No ZIP found"
+            exit 1
+          fi
+          SIZE_MB=$(du -m "$ZIP" | cut -f1)
+          echo "ZIP size: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -lt 100 ]; then
+            echo "FAIL: ZIP too small (${SIZE_MB} MB)"
+            exit 1
+          fi
+          echo "OK: ZIP size is reasonable"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-windows
+          path: packaging/Tomviz-*.zip
+
+  build-linux:
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: tomviz-package
+          conda-remove-defaults: 'true'
+
+      - name: Install packaging tools
+        shell: bash -el {0}
+        run: |
+          conda install -y -c conda-forge conda-pack cmake
+
+      - name: Build package
+        shell: bash -el {0}
+        env:
+          TOMVIZ_VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
+          cpack --config CPackConfig.cmake
+
+      - name: Verify package (structural)
+        shell: bash -el {0}
+        env:
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          python verify.py _build/install/tomviz --python-version "$TOMVIZ_PYTHON_VERSION"
+
+      - name: Install xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb mesa-utils
+
+      - name: Verify package (GUI smoke test with xvfb)
+        run: |
+          INSTALL_DIR="packaging/_build/install/tomviz"
+
+          # Launch via the launcher script under xvfb
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
+            "$INSTALL_DIR/tomviz" &
+          PID=$!
+          sleep 15
+
+          if kill -0 "$PID" 2>/dev/null; then
+            echo "OK: tomviz process $PID is running after 15s under xvfb"
+            kill "$PID" || true
+            wait "$PID" 2>/dev/null || true
+          else
+            wait "$PID" 2>/dev/null
+            EXIT_CODE=$?
+            echo "FAIL: tomviz exited early with code $EXIT_CODE"
+            exit 1
+          fi
+
+      - name: Check artifact size
+        run: |
+          TGZ=$(ls packaging/Tomviz-*.tar.gz 2>/dev/null | head -1)
+          if [ -z "$TGZ" ]; then
+            echo "FAIL: No tar.gz found"
+            exit 1
+          fi
+          SIZE_MB=$(du -m "$TGZ" | cut -f1)
+          echo "tar.gz size: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -lt 100 ]; then
+            echo "FAIL: tar.gz too small (${SIZE_MB} MB)"
+            exit 1
+          fi
+          echo "OK: tar.gz size is reasonable"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-linux
+          path: packaging/Tomviz-*.tar.gz
+
+  create-release:
+    needs: [check-version, build-macos-x64, build-macos-arm64, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Rename artifacts for clarity
+        run: |
+          mkdir -p release
+          VERSION="${{ needs.check-version.outputs.tomviz_version }}"
+
+          for f in artifacts/installer-macos-x64/*.dmg; do
+            cp "$f" "release/Tomviz-${VERSION}-macOS-x86_64.dmg"
+          done
+          for f in artifacts/installer-macos-arm64/*.dmg; do
+            cp "$f" "release/Tomviz-${VERSION}-macOS-arm64.dmg"
+          done
+          for f in artifacts/installer-windows/*.zip; do
+            cp "$f" "release/Tomviz-${VERSION}-Windows-x86_64.zip"
+          done
+          for f in artifacts/installer-linux/*.tar.gz; do
+            cp "$f" "release/Tomviz-${VERSION}-Linux-x86_64.tar.gz"
+          done
+
+          ls -la release/
+
+      - name: Create release on this repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+        run: |
+          gh release create "v${VERSION}" release/* \
+            --repo "${{ github.repository }}" \
+            --title "Tomviz ${VERSION}" \
+            --notes "Standalone installers for Tomviz ${VERSION}.
+
+          **macOS DMGs are unsigned.** Download and sign/notarize internally before distribution.
+
+          Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}."
+
+      # Optionally also create a release on OpenChemistry/tomviz
+      # Requires a PAT with contents:write on that repo, stored as TOMVIZ_RELEASE_TOKEN
+      - name: Create release on OpenChemistry/tomviz
+        if: vars.PUBLISH_TO_TOMVIZ_REPO == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.TOMVIZ_RELEASE_TOKEN }}
+          VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+        run: |
+          gh release create "v${VERSION}" release/* \
+            --repo "OpenChemistry/tomviz" \
+            --title "Tomviz ${VERSION}" \
+            --notes "Standalone installers for Tomviz ${VERSION}.
+
+          Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}." \
+            || echo "Release may already exist on OpenChemistry/tomviz, skipping."

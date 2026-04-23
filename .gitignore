@@ -1,0 +1,8 @@
+_build/
+_CPack_Packages/
+*.dmg
+*.msi
+*.zip
+*.tar.gz
+*.tar.bz2
+env/

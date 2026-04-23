@@ -139,10 +139,14 @@ jobs:
           fi
           echo "OK: DMG size is reasonable"
 
+      - name: Rename artifact
+        run: |
+          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-macOS-x86_64.dmg"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: installer-macos-x64
-          path: packaging/Tomviz-*.dmg
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-macOS-x86_64.dmg
+          path: packaging/Tomviz-*-macOS-x86_64.dmg
 
   build-macos-arm64:
     needs: check-version
@@ -214,10 +218,14 @@ jobs:
           fi
           echo "OK: DMG size is reasonable"
 
+      - name: Rename artifact
+        run: |
+          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-macOS-arm64.dmg"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: installer-macos-arm64
-          path: packaging/Tomviz-*.dmg
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-macOS-arm64.dmg
+          path: packaging/Tomviz-*-macOS-arm64.dmg
 
   build-windows:
     needs: check-version
@@ -363,7 +371,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: installer-windows
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}.zip
           path: packaging/Tomviz-*.zip
 
   build-linux:
@@ -445,7 +453,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: installer-linux
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}.tar.gz
           path: packaging/Tomviz-*.tar.gz
 
   create-release:
@@ -458,24 +466,11 @@ jobs:
         with:
           path: artifacts
 
-      - name: Rename artifacts for clarity
+      - name: Collect release files
         run: |
           mkdir -p release
-          VERSION="${{ needs.check-version.outputs.tomviz_version }}"
-
-          for f in artifacts/installer-macos-x64/*.dmg; do
-            cp "$f" "release/Tomviz-${VERSION}-macOS-x86_64.dmg"
-          done
-          for f in artifacts/installer-macos-arm64/*.dmg; do
-            cp "$f" "release/Tomviz-${VERSION}-macOS-arm64.dmg"
-          done
-          for f in artifacts/installer-windows/*.zip; do
-            cp "$f" "release/Tomviz-${VERSION}-Windows-x86_64.zip"
-          done
-          for f in artifacts/installer-linux/*.tar.gz; do
-            cp "$f" "release/Tomviz-${VERSION}-Linux-x86_64.tar.gz"
-          done
-
+          # Files are already named correctly from each build job
+          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release/ \;
           ls -la release/
 
       - name: Create release on this repo

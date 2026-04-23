@@ -137,6 +137,16 @@ def extract_archive(archive_path, dest_dir):
     return dest_dir
 
 
+def cleanup_conda_pack_files(env_dir):
+    """Remove conda-pack leftover files that tomviz might pick up as operators."""
+    for name in ["conda_unpack_progress.py", "conda-unpack"]:
+        for subdir in ["bin", "Scripts"]:
+            path = os.path.join(env_dir, subdir, name)
+            if os.path.exists(path):
+                os.remove(path)
+                print(f"  Removed {os.path.relpath(path, env_dir)}")
+
+
 def post_process_darwin(env_dir, tomviz_version):
     """Create a macOS .app bundle."""
     app_name = "tomviz"
@@ -153,6 +163,9 @@ def post_process_darwin(env_dir, tomviz_version):
     if os.path.exists(bundle_env_dir):
         shutil.rmtree(bundle_env_dir)
     shutil.move(env_dir, bundle_env_dir)
+
+    # Remove conda-pack leftovers that tomviz might scan
+    cleanup_conda_pack_files(bundle_env_dir)
 
     # Create the launcher script
     launcher_path = os.path.join(macos_dir, "tomviz")
@@ -191,6 +204,9 @@ def post_process_linux(env_dir, tomviz_version):
         shutil.rmtree(bundle_env_dir)
     shutil.move(env_dir, bundle_env_dir)
 
+    # Remove conda-pack leftovers
+    cleanup_conda_pack_files(bundle_env_dir)
+
     # Create launcher script
     launcher_src = os.path.join(SCRIPT_DIR, "linux", "tomviz.sh")
     launcher_dst = os.path.join(install_dir, "tomviz")
@@ -214,6 +230,9 @@ def post_process_windows(env_dir, tomviz_version):
     if os.path.exists(bundle_env_dir):
         shutil.rmtree(bundle_env_dir)
     shutil.move(env_dir, bundle_env_dir)
+
+    # Remove conda-pack leftovers
+    cleanup_conda_pack_files(bundle_env_dir)
 
     # Create launcher batch file
     launcher_src = os.path.join(SCRIPT_DIR, "windows", "tomviz.bat")

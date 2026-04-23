@@ -234,6 +234,14 @@ def post_process_windows(env_dir, tomviz_version):
     # Remove conda-pack leftovers
     cleanup_conda_pack_files(bundle_env_dir)
 
+    # Remove directories not needed at runtime that cause Windows path length
+    # issues with WIX (deeply nested header files exceed 260 char limit)
+    for dirname in ["include", "mkspecs"]:
+        remove_dir = os.path.join(bundle_env_dir, "Library", dirname)
+        if os.path.exists(remove_dir):
+            shutil.rmtree(remove_dir)
+            print(f"  Removed {os.path.relpath(remove_dir, install_dir)}")
+
     # Create launcher batch file
     launcher_src = os.path.join(SCRIPT_DIR, "windows", "tomviz.bat")
     shutil.copy2(launcher_src, os.path.join(install_dir, "tomviz.bat"))

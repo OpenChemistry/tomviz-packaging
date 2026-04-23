@@ -319,14 +319,16 @@ jobs:
         run: |
           ENV_DIR="packaging/_build/install/tomviz/env"
           echo "=== Checking Qt plugins ==="
-          PLUGIN_DIR="$ENV_DIR/Library/plugins"
-          if [ -d "$PLUGIN_DIR/platforms" ]; then
-            echo "OK: Qt platforms plugin dir exists"
-            ls "$PLUGIN_DIR/platforms/"
-          else
-            echo "FAIL: Qt platforms plugin dir not found at $PLUGIN_DIR/platforms"
-            exit 1
-          fi
+          # Qt plugins can be in different locations depending on the conda layout
+          for PLUGIN_DIR in "$ENV_DIR/Library/plugins" "$ENV_DIR/Library/lib/qt6/plugins"; do
+            if [ -d "$PLUGIN_DIR/platforms" ]; then
+              echo "OK: Qt platforms plugin dir exists at $PLUGIN_DIR/platforms"
+              ls "$PLUGIN_DIR/platforms/"
+              exit 0
+            fi
+          done
+          echo "FAIL: Qt platforms plugin dir not found"
+          exit 1
 
       - name: Verify package (smoke test - best effort)
         continue-on-error: true

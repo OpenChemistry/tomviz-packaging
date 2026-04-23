@@ -8,7 +8,7 @@ set "PATH=%ENV_DIR%\Library\bin;%ENV_DIR%\Scripts;%ENV_DIR%;%PATH%"
 set "CONDA_PREFIX=%ENV_DIR%"
 
 REM Qt/ParaView plugin paths
-set "QT_PLUGIN_PATH=%ENV_DIR%\Library\plugins"
+set "QT_PLUGIN_PATH=%ENV_DIR%\Library\lib\qt6\plugins"
 set "PV_PLUGIN_PATH=%ENV_DIR%\Library\lib\paraview-6.1\plugins"
 
 "%ENV_DIR%\Library\bin\tomviz.exe" %*

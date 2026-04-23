@@ -253,7 +253,7 @@ jobs:
         run: |
           cd packaging
           python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
-          cpack --config CPackConfig.cmake -G ZIP
+          cpack --config CPackConfig.cmake -G "ZIP;WIX"
 
       - name: Verify package (structural)
         shell: bash -el {0}
@@ -353,26 +353,61 @@ jobs:
             echo WARN: tomviz.exe not running after 15s (expected on headless CI)
           )
 
-      - name: Check artifact size
+      - name: Verify MSI
         shell: bash
         run: |
-          ZIP=$(ls packaging/Tomviz-*.zip 2>/dev/null | head -1)
-          if [ -z "$ZIP" ]; then
-            echo "FAIL: No ZIP found"
+          MSI=$(ls packaging/Tomviz-*.msi 2>/dev/null | head -1)
+          if [ -z "$MSI" ]; then
+            echo "FAIL: No MSI found"
             exit 1
           fi
-          SIZE_MB=$(du -m "$ZIP" | cut -f1)
-          echo "ZIP size: ${SIZE_MB} MB"
-          if [ "$SIZE_MB" -lt 100 ]; then
-            echo "FAIL: ZIP too small (${SIZE_MB} MB)"
+          echo "=== Validating MSI: $MSI ==="
+          # Check it's a valid OLE compound file (MSI magic bytes)
+          MAGIC=$(xxd -l 8 "$MSI" | head -1)
+          if echo "$MAGIC" | grep -q "d0cf 11e0"; then
+            echo "OK: Valid MSI file (OLE compound document)"
+          else
+            echo "FAIL: Not a valid MSI file"
             exit 1
           fi
-          echo "OK: ZIP size is reasonable"
+          # Query MSI properties using PowerShell
+          powershell.exe -Command "
+            \$db = (New-Object -ComObject WindowsInstaller.Installer).OpenDatabase('$(cygpath -w "$MSI")', 0)
+            \$view = \$db.OpenView(\"SELECT Property, Value FROM Property WHERE Property='ProductName' OR Property='ProductVersion' OR Property='Manufacturer'\")
+            \$view.Execute()
+            while (\$record = \$view.Fetch()) {
+              Write-Host \"  \$(\$record.StringData(1)): \$(\$record.StringData(2))\"
+            }
+          "
+          echo "OK: MSI properties verified"
+
+      - name: Check artifact sizes
+        shell: bash
+        run: |
+          for ext in zip msi; do
+            FILE=$(ls packaging/Tomviz-*.$ext 2>/dev/null | head -1)
+            if [ -z "$FILE" ]; then
+              echo "FAIL: No .$ext found"
+              exit 1
+            fi
+            SIZE_MB=$(du -m "$FILE" | cut -f1)
+            echo "$ext size: ${SIZE_MB} MB"
+            if [ "$SIZE_MB" -lt 100 ]; then
+              echo "FAIL: $ext too small (${SIZE_MB} MB)"
+              exit 1
+            fi
+            echo "OK: $ext size is reasonable"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
           name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}.zip
           path: packaging/Tomviz-*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}.msi
+          path: packaging/Tomviz-*.msi
 
   build-linux:
     needs: check-version
@@ -470,7 +505,7 @@ jobs:
         run: |
           mkdir -p release
           # Files are already named correctly from each build job
-          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release/ \;
+          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.msi" -o -name "*.tar.gz" \) -exec cp {} release/ \;
           ls -la release/
 
       - name: Create release on this repo

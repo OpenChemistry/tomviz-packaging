@@ -47,7 +47,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_VERSION: ${{ github.event.inputs.tomviz_version }}
-          INPUT_FORCE: ${{ github.event.inputs.force }}
+          INPUT_FORCE: ${{ github.event.inputs.force || (github.event_name == 'push' && 'true') }}
           PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
         run: |
           # Get the latest tomviz version and build string from conda-forge

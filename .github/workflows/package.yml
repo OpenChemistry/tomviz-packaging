@@ -1,6 +1,15 @@
 name: Package Tomviz Installers
 
 on:
+  # Rebuild on push to master when packaging code changes
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/package.yml'
+
   # Poll for new conda-forge releases every 6 hours
   schedule:
     - cron: '0 */6 * * *'

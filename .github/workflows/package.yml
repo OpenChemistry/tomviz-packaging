@@ -172,12 +172,12 @@ jobs:
 
       - name: Rename artifact
         run: |
-          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-macOS-x86_64.dmg"
+          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-x86_64.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-macOS-x86_64.dmg
-          path: packaging/Tomviz-*-macOS-x86_64.dmg
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-x86_64.dmg
+          path: packaging/Tomviz-*-x86_64.dmg
 
   build-macos-arm64:
     needs: check-version
@@ -251,12 +251,12 @@ jobs:
 
       - name: Rename artifact
         run: |
-          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-macOS-arm64.dmg"
+          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-arm64.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-macOS-arm64.dmg
-          path: packaging/Tomviz-*-macOS-arm64.dmg
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-arm64.dmg
+          path: packaging/Tomviz-*-arm64.dmg
 
   build-windows:
     needs: check-version

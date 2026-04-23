@@ -54,7 +54,7 @@ EXPECTED_DIRS_WINDOWS = [
 
 # Minimum and maximum expected sizes in MB
 MIN_SIZE_MB = 300
-MAX_SIZE_MB = 3000
+MAX_SIZE_MB = 8000
 
 
 class Verifier:

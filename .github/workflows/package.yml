@@ -275,7 +275,12 @@ jobs:
         run: |
           cd packaging
           python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
-          cpack --config CPackConfig.cmake -G "ZIP;WIX"
+          cpack --config CPackConfig.cmake -G ZIP
+          cpack --config CPackConfig.cmake -G WIX || {
+            echo "=== WIX log ==="
+            cat _CPack_Packages/WIX/wix.log 2>/dev/null || echo "wix.log not found"
+            exit 1
+          }
 
       - name: Verify package (structural)
         shell: bash -el {0}

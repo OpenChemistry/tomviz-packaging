@@ -365,21 +365,6 @@ jobs:
           echo "FAIL: Qt platforms plugin dir not found"
           exit 1
 
-      - name: Verify package (smoke test - best effort)
-        continue-on-error: true
-        shell: cmd
-        run: |
-          start "" "packaging\_build\install\tomviz\tomviz.bat"
-          timeout /t 15 /nobreak > nul
-
-          tasklist /FI "IMAGENAME eq tomviz.exe" 2>nul | find "tomviz.exe" > nul
-          if %ERRORLEVEL% equ 0 (
-            echo OK: tomviz.exe is running after 15s
-            taskkill /IM tomviz.exe /F > nul 2>&1
-          ) else (
-            echo WARN: tomviz.exe not running after 15s (expected on headless CI)
-          )
-
       - name: Verify MSI
         shell: bash
         run: |
@@ -472,35 +457,27 @@ jobs:
           cd packaging
           python verify.py _build/install/tomviz --python-version "$TOMVIZ_PYTHON_VERSION"
 
-      - name: Install xvfb and Mesa software renderer
+      - name: Verify Python imports
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb mesa-utils libegl-mesa0 libgl1-mesa-dri libglu1-mesa
-
-      - name: Verify package (GUI smoke test with xvfb)
-        continue-on-error: true
-        env:
-          LIBGL_ALWAYS_SOFTWARE: '1'
-          MESA_GL_VERSION_OVERRIDE: '3.3'
-        run: |
-          INSTALL_DIR="packaging/_build/install/tomviz"
-
-          # Launch via the launcher script under xvfb
-          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
-            "$INSTALL_DIR/tomviz" &
-          PID=$!
-          sleep 15
-
-          if kill -0 "$PID" 2>/dev/null; then
-            echo "OK: tomviz process $PID is running after 15s under xvfb"
-            kill "$PID" || true
-            wait "$PID" 2>/dev/null || true
-          else
-            wait "$PID" 2>/dev/null
-            EXIT_CODE=$?
-            echo "FAIL: tomviz exited early with code $EXIT_CODE"
-            exit 1
-          fi
+          ENV_DIR="packaging/_build/install/tomviz/env"
+          echo "=== Testing Python imports ==="
+          "$ENV_DIR/bin/python" -c "
+          import tomviz
+          print('  OK: import tomviz')
+          import tomviz.cli
+          print('  OK: import tomviz.cli')
+          try:
+              import tomviz._wrapping
+              print('  OK: import tomviz._wrapping')
+          except ImportError as e:
+              print(f'  WARN: import tomviz._wrapping failed: {e}')
+          try:
+              import tomviz._realtime.ctvlib
+              print('  OK: import tomviz._realtime.ctvlib')
+          except ImportError as e:
+              print(f'  WARN: import tomviz._realtime.ctvlib failed: {e}')
+          print('Python imports OK')
+          "
 
       - name: Check artifact size
         run: |

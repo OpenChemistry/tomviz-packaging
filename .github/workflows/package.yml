@@ -28,51 +28,73 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tomviz_version: ${{ steps.check.outputs.tomviz_version }}
+      build_string: ${{ steps.check.outputs.build_string }}
       should_build: ${{ steps.check.outputs.should_build }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check for new version
+      - name: Check for new version or build
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_VERSION: ${{ github.event.inputs.tomviz_version }}
           INPUT_FORCE: ${{ github.event.inputs.force }}
+          PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
         run: |
-          # Get the latest tomviz version from conda-forge
-          if [ -n "$INPUT_VERSION" ]; then
-            VERSION="$INPUT_VERSION"
-          else
-            VERSION=$(python3 -c "
+          # Get the latest tomviz version and build string from conda-forge
+          read VERSION BUILD_STRING < <(python3 -c "
           import urllib.request, json
           url = 'https://conda.anaconda.org/conda-forge/linux-64/repodata.json'
           data = json.loads(urllib.request.urlopen(url).read())
-          versions = set()
+          packages = []
           for name, info in {**data.get('packages', {}), **data.get('packages.conda', {})}.items():
               if info.get('name') == 'tomviz':
-                  versions.add(info['version'])
-          def ver_key(v):
-              return tuple(int(x) for x in v.split('.') if x.isdigit())
-          print(sorted(versions, key=ver_key)[-1])
+                  packages.append(info)
+          py_prefix = 'py' + '${PYTHON_VERSION}'.replace('.', '')
+          matching = [p for p in packages if p['build'].startswith(py_prefix)]
+          if not matching:
+              matching = packages
+          def ver_key(p):
+              parts = tuple(int(x) for x in p['version'].split('.') if x.isdigit())
+              return (parts, p['build_number'])
+          latest = sorted(matching, key=ver_key)[-1]
+          print(latest['version'], latest['build'])
           ")
+
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
           fi
 
-          echo "Latest conda-forge version: $VERSION"
+          echo "Latest conda-forge: $VERSION ($BUILD_STRING)"
           echo "tomviz_version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_string=$BUILD_STRING" >> "$GITHUB_OUTPUT"
+
+          if [ "$INPUT_FORCE" = "true" ]; then
+            echo "Force rebuild requested."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # Check if we already have a release for this version
-          EXISTING=$(gh release view "v$VERSION" --json tagName 2>/dev/null || echo "")
-          if [ -n "$EXISTING" ] && [ "$INPUT_FORCE" != "true" ]; then
-            echo "Release v$VERSION already exists, skipping."
+          EXISTING_NOTES=$(gh release view "v$VERSION" --json body --jq '.body' 2>/dev/null || echo "")
+          if [ -z "$EXISTING_NOTES" ]; then
+            echo "No existing release for v$VERSION — will build."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          elif echo "$EXISTING_NOTES" | grep -q "build: $BUILD_STRING"; then
+            echo "Release v$VERSION already matches build $BUILD_STRING — skipping."
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           else
+            echo "Release v$VERSION exists but build changed to $BUILD_STRING — rebuilding."
+            # Delete the old release so we can recreate it
+            gh release delete "v$VERSION" --repo "${{ github.repository }}" -y || true
+            git push --delete origin "v$VERSION" 2>/dev/null || true
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
   build-macos-x64:
     needs: check-version
     if: needs.check-version.outputs.should_build == 'true'
-    runs-on: macos-13  # x64 runner
+    runs-on: macos-15-intel  # x64 runner
     steps:
       - uses: actions/checkout@v4
 
@@ -512,6 +534,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+          BUILD_STRING: ${{ needs.check-version.outputs.build_string }}
         run: |
           gh release create "v${VERSION}" release/* \
             --repo "${{ github.repository }}" \
@@ -520,7 +543,8 @@ jobs:
 
           **macOS DMGs are unsigned.** Download and sign/notarize internally before distribution.
 
-          Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}."
+          Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}.
+          conda-forge build: ${BUILD_STRING}"
 
       # Optionally also create a release on OpenChemistry/tomviz
       # Requires a PAT with contents:write on that repo, stored as TOMVIZ_RELEASE_TOKEN
@@ -529,11 +553,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TOMVIZ_RELEASE_TOKEN }}
           VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+          BUILD_STRING: ${{ needs.check-version.outputs.build_string }}
         run: |
           gh release create "v${VERSION}" release/* \
             --repo "OpenChemistry/tomviz" \
             --title "Tomviz ${VERSION}" \
             --notes "Standalone installers for Tomviz ${VERSION}.
 
-          Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}." \
+          Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}.
+          conda-forge build: ${BUILD_STRING}" \
             || echo "Release may already exist on OpenChemistry/tomviz, skipping."

@@ -522,6 +522,10 @@ jobs:
           VERSION: ${{ needs.check-version.outputs.tomviz_version }}
           BUILD_STRING: ${{ needs.check-version.outputs.build_string }}
         run: |
+          # Delete existing release if present
+          gh release delete "v${VERSION}" --repo "${{ github.repository }}" -y 2>/dev/null || true
+          git push --delete origin "v${VERSION}" 2>/dev/null || true
+
           gh release create "v${VERSION}" release/* \
             --repo "${{ github.repository }}" \
             --title "Tomviz ${VERSION}" \

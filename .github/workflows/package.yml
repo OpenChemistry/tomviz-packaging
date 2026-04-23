@@ -126,7 +126,15 @@ jobs:
         run: |
           cd packaging
           python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
-          cpack --config CPackConfig.cmake
+          # Retry cpack up to 3 times (hdiutil detach can fail transiently)
+          for attempt in 1 2 3; do
+            if cpack --config CPackConfig.cmake; then
+              break
+            fi
+            echo "CPack attempt $attempt failed, retrying in 10s..."
+            rm -rf _CPack_Packages
+            sleep 10
+          done
 
       - name: Verify package (structural)
         shell: bash -el {0}
@@ -205,7 +213,15 @@ jobs:
         run: |
           cd packaging
           python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
-          cpack --config CPackConfig.cmake
+          # Retry cpack up to 3 times (hdiutil detach can fail transiently)
+          for attempt in 1 2 3; do
+            if cpack --config CPackConfig.cmake; then
+              break
+            fi
+            echo "CPack attempt $attempt failed, retrying in 10s..."
+            rm -rf _CPack_Packages
+            sleep 10
+          done
 
       - name: Verify package (structural)
         shell: bash -el {0}

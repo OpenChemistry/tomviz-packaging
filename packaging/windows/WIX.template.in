@@ -56,18 +56,18 @@
                         Name="Tomviz_installed" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
             </Directory>
-        </DirectoryRef>
 
-        <DirectoryRef Id="ProgramMenuFolder">
-            <Component Id="CM_SHORTCUT_TOMVIZ" Guid="$(var.CPACK_WIX_PRODUCT_GUID)">
-                <Shortcut Id="TomvizStartMenuShortcut"
-                    Name="Tomviz"
-                    Target="[INSTALL_ROOT]tomviz.bat"
-                    WorkingDirectory="INSTALL_ROOT"
-                    Icon="ProductIcon.ico" />
-                <RegistryValue Root="HKCU" Key="Software\Kitware\Tomviz"
-                    Name="Tomviz_installed" Type="integer" Value="1" KeyPath="yes"/>
-            </Component>
+            <Directory Id="ProgramMenuFolder" Name="Programs">
+                <Component Id="CM_SHORTCUT_TOMVIZ" Guid="$(var.CPACK_WIX_PRODUCT_GUID)">
+                    <Shortcut Id="TomvizStartMenuShortcut"
+                        Name="Tomviz"
+                        Target="[INSTALL_ROOT]tomviz.bat"
+                        WorkingDirectory="INSTALL_ROOT"
+                        Icon="ProductIcon.ico" />
+                    <RegistryValue Root="HKCU" Key="Software\Kitware\Tomviz"
+                        Name="Tomviz_installed" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
+            </Directory>
         </DirectoryRef>
 
         <FeatureRef Id="ProductFeature">

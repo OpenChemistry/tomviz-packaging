@@ -12,8 +12,19 @@ import argparse
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
+
+
+# Windows system DLLs that ship with the OS and don't need to be bundled.
+WINDOWS_SYSTEM_DLL_RE = re.compile(
+    r"^(KERNEL32|USER32|ADVAPI32|SHELL32|ole32|OLEAUT32|GDI32|COMCTL32|"
+    r"WS2_32|CRYPT32|WINSPOOL|COMDLG32|IMM32|WINMM|ntdll|SETUPAPI|"
+    r"WTSAPI32|NETAPI32|USERENV|dbghelp|PSAPI|VERSION|SHLWAPI|"
+    r"MSVCRT|MSVCP|VCRUNTIME|api-ms-|ext-ms-)",
+    re.IGNORECASE,
+)
 
 
 EXPECTED_FILES_UNIX = [
@@ -157,13 +168,14 @@ class Verifier:
         """Check for missing shared library dependencies."""
         print("\n=== Library Dependency Checks ===")
 
+        if self.system == "Windows":
+            self._check_library_deps_windows()
+        else:
+            self._check_library_deps_unix()
+
+    def _check_library_deps_unix(self):
         is_app_bundle = (self.system == "Darwin" and
                          os.path.exists(os.path.join(self.install_dir, "Contents")))
-
-        if self.system == "Windows":
-            # Can't easily check DLL deps on Windows CI without dumpbin
-            self.ok("Skipping library dep check on Windows (no ldd equivalent)")
-            return
 
         if is_app_bundle:
             env_prefix = os.path.join(self.install_dir, "Contents", "env")
@@ -188,14 +200,10 @@ class Verifier:
                 continue
 
             name = os.path.basename(binary)
-            if self.system == "Darwin":
-                result = subprocess.run(
-                    ["otool", "-L", binary], capture_output=True, text=True)
-                output = result.stdout
-            else:
-                result = subprocess.run(
-                    ["ldd", binary], capture_output=True, text=True)
-                output = result.stdout
+            tool = "otool" if self.system == "Darwin" else "ldd"
+            args = [tool, "-L", binary] if tool == "otool" else [tool, binary]
+            result = subprocess.run(args, capture_output=True, text=True)
+            output = result.stdout
 
             if "not found" in output:
                 missing = [line.strip() for line in output.splitlines()
@@ -204,6 +212,56 @@ class Verifier:
                     self.error(f"{name}: {m}")
             else:
                 self.ok(f"{name}: all library dependencies resolved")
+
+    def _check_library_deps_windows(self):
+        if not shutil.which("dumpbin"):
+            self.error("dumpbin not found on PATH — cannot verify DLL dependencies")
+            return
+
+        env_prefix = os.path.join(self.install_dir, "env")
+        search_dirs = [
+            os.path.join(env_prefix, "Library", "bin"),
+            env_prefix,
+        ]
+        binaries_to_check = [
+            os.path.join(env_prefix, "Library", "bin", "tomviz.exe"),
+            os.path.join(env_prefix, "Library", "bin", "tomvizcore.dll"),
+        ]
+
+        for binary in binaries_to_check:
+            if not os.path.exists(binary):
+                self.warn(f"Binary not found for dep check: {binary}")
+                continue
+
+            name = os.path.basename(binary)
+            result = subprocess.run(
+                ["dumpbin", "/DEPENDENTS", binary],
+                capture_output=True, text=True)
+            if result.returncode != 0:
+                self.error(f"{name}: dumpbin failed: {result.stderr.strip()}")
+                continue
+
+            # dumpbin prints one DLL per line, indented, in the Image has the
+            # following dependencies section. Match anything ending in .dll.
+            deps = []
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.lower().endswith(".dll"):
+                    deps.append(line)
+
+            missing = []
+            for dll in deps:
+                if WINDOWS_SYSTEM_DLL_RE.match(dll):
+                    continue
+                if not any(os.path.isfile(os.path.join(d, dll)) for d in search_dirs):
+                    missing.append(dll)
+
+            if missing:
+                for dll in missing:
+                    self.error(f"{name}: missing dependency {dll}")
+            else:
+                self.ok(f"{name}: all non-system DLL dependencies found "
+                        f"({len(deps)} checked)")
 
     def check_prefix_leaks(self):
         """Check for conda build prefixes left in text files."""

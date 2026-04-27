@@ -9,21 +9,18 @@ Intended to be run with the bundled interpreter from a packaged install, e.g.:
 
 import importlib
 
-REQUIRED = ["tomviz", "tomviz.cli"]
-OPTIONAL = ["tomviz._wrapping", "tomviz._realtime.ctvlib"]
+REQUIRED = [
+    "tomviz",
+    "tomviz.cli",
+    "tomviz._wrapping",
+    "tomviz._realtime.ctvlib",
+]
 
 
 def main():
     for mod in REQUIRED:
         importlib.import_module(mod)
         print(f"  OK: import {mod}")
-
-    for mod in OPTIONAL:
-        try:
-            importlib.import_module(mod)
-            print(f"  OK: import {mod}")
-        except ImportError as e:
-            print(f"  WARN: import {mod} failed: {e}")
 
     print("Python imports OK")
 

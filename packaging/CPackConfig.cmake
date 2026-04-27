@@ -7,6 +7,10 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_LIST_DIR}/LICENSE.txt")
 # Version from environment
 set(CPACK_PACKAGE_VERSION "$ENV{TOMVIZ_VERSION}")
 
+if(NOT CPACK_PACKAGE_VERSION)
+  message(FATAL_ERROR "TOMVIZ_VERSION environment variable is not set")
+endif()
+
 # Parse version components
 string(REPLACE "." ";" _version_list "${CPACK_PACKAGE_VERSION}")
 list(LENGTH _version_list _version_len)
@@ -20,10 +24,6 @@ if(_version_len GREATER 2)
   list(GET _version_list 2 CPACK_PACKAGE_VERSION_PATCH)
 else()
   set(CPACK_PACKAGE_VERSION_PATCH "0")
-endif()
-
-if(NOT CPACK_PACKAGE_VERSION)
-  message(FATAL_ERROR "TOMVIZ_VERSION environment variable is not set")
 endif()
 
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "Tomviz")

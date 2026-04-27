@@ -556,7 +556,7 @@ jobs:
             --title "Tomviz ${VERSION}" \
             --notes "Standalone installers for Tomviz ${VERSION}.
 
-          **macOS DMGs are unsigned.** Download and sign/notarize internally before distribution.
+          **macOS DMGs and Windows MSI are unsigned.** Download and sign/notarize internally before distribution.
 
           Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}.
           conda-forge build: ${BUILD_STRING}"

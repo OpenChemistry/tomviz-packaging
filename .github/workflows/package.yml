@@ -14,23 +14,8 @@ on:
   schedule:
     - cron: '0 */6 * * *'
 
-  # Allow manual triggers
-  workflow_dispatch:
-    inputs:
-      tomviz_version:
-        description: 'Tomviz version to package (leave empty for latest)'
-        required: false
-      python_version:
-        description: 'Python version'
-        required: false
-        default: '3.13'
-      force:
-        description: 'Force rebuild even if version already released'
-        type: boolean
-        default: false
-
 env:
-  PYTHON_VERSION: ${{ github.event.inputs.python_version || '3.13' }}
+  PYTHON_VERSION: '3.13'
 
 jobs:
   check-version:
@@ -46,8 +31,6 @@ jobs:
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_VERSION: ${{ github.event.inputs.tomviz_version }}
-          INPUT_FORCE: ${{ github.event.inputs.force || (github.event_name == 'push' && 'true') }}
           PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
         run: |
           # Get the latest tomviz version and build string from conda-forge
@@ -70,16 +53,13 @@ jobs:
           print(latest['version'], latest['build'])
           ")
 
-          if [ -n "$INPUT_VERSION" ]; then
-            VERSION="$INPUT_VERSION"
-          fi
-
           echo "Latest conda-forge: $VERSION ($BUILD_STRING)"
           echo "tomviz_version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_string=$BUILD_STRING" >> "$GITHUB_OUTPUT"
 
-          if [ "$INPUT_FORCE" = "true" ]; then
-            echo "Force rebuild requested."
+          # Always rebuild on push (packaging code changed); otherwise check for new version/build.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "Push event — forcing rebuild."
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -560,21 +540,3 @@ jobs:
 
           Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}.
           conda-forge build: ${BUILD_STRING}"
-
-      # Optionally also create a release on OpenChemistry/tomviz
-      # Requires a PAT with contents:write on that repo, stored as TOMVIZ_RELEASE_TOKEN
-      - name: Create release on OpenChemistry/tomviz
-        if: vars.PUBLISH_TO_TOMVIZ_REPO == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.TOMVIZ_RELEASE_TOKEN }}
-          VERSION: ${{ needs.check-version.outputs.tomviz_version }}
-          BUILD_STRING: ${{ needs.check-version.outputs.build_string }}
-        run: |
-          gh release create "v${VERSION}" release/* \
-            --repo "OpenChemistry/tomviz" \
-            --title "Tomviz ${VERSION}" \
-            --notes "Standalone installers for Tomviz ${VERSION}.
-
-          Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}.
-          conda-forge build: ${BUILD_STRING}" \
-            || echo "Release may already exist on OpenChemistry/tomviz, skipping."

@@ -8,7 +8,7 @@ This repository builds standalone installers for [Tomviz](https://github.com/Ope
 |---|---|---|
 | macOS x64 | `.dmg` | Unsigned — sign/notarize internally before distribution |
 | macOS ARM | `.dmg` | Unsigned — sign/notarize internally before distribution |
-| Windows | `.msi`, `.zip` | |
+| Windows | `.msi`, `.zip` | MSI is unsigned — sign internally before distribution |
 | Linux | `.tar.gz` | |
 
 ## How It Works
@@ -27,20 +27,13 @@ python package.py --tomviz-version 2.3.1
 cpack --config CPackConfig.cmake
 ```
 
-## Configuration
+## Publishing to OpenChemistry/tomviz
 
-### Publishing to OpenChemistry/tomviz
+Releases in this repo are built automatically for every conda-forge update, but they are **not** auto-published to [OpenChemistry/tomviz](https://github.com/OpenChemistry/tomviz). The macOS DMGs and Windows MSI produced by CI are unsigned, and publishing unsigned binaries to the user-facing repo would trigger Gatekeeper/SmartScreen warnings for end users.
 
-To also publish releases to the main tomviz repo:
+Instead, specific releases are hand-picked, signed, and published manually:
 
-1. Create a PAT with `contents:write` permission on `OpenChemistry/tomviz`
-2. Add it as a repository secret named `TOMVIZ_RELEASE_TOKEN`
-3. Set the repository variable `PUBLISH_TO_TOMVIZ_REPO` to `true`
-
-### macOS Signing
-
-The CI produces unsigned DMGs. To sign and notarize:
-
-1. Download the DMG from the GitHub Release
-2. Sign and notarize using your internal process
-3. Re-upload the signed DMG to the release
+1. Pick a release from this repo's GitHub Releases page.
+2. Download the macOS DMGs (x64 and ARM) and the Windows MSI.
+3. Sign and notarize the DMGs, and sign the MSI, using the internal signing process.
+4. Create a matching release on `OpenChemistry/tomviz` and upload the signed DMGs and MSI along with the Linux artifacts from this repo's release.

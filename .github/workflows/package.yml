@@ -59,9 +59,7 @@ jobs:
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           else
             echo "Release v$VERSION exists but build changed to $BUILD_STRING — rebuilding."
-            # Delete the old release so we can recreate it
-            gh release delete "v$VERSION" --repo "${{ github.repository }}" -y || true
-            git push --delete origin "v$VERSION" 2>/dev/null || true
+            # The old release will be replaced by create-release if the build succeeds.
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -75,13 +73,8 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
-          activate-environment: tomviz-package
+          environment-file: packaging/environment.yml
           conda-remove-defaults: 'true'
-
-      - name: Install packaging tools
-        shell: bash -el {0}
-        run: |
-          conda install -y -c conda-forge conda-pack cmake
 
       - name: Build package
         shell: bash -el {0}
@@ -162,13 +155,8 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
-          activate-environment: tomviz-package
+          environment-file: packaging/environment.yml
           conda-remove-defaults: 'true'
-
-      - name: Install packaging tools
-        shell: bash -el {0}
-        run: |
-          conda install -y -c conda-forge conda-pack cmake
 
       - name: Build package
         shell: bash -el {0}
@@ -249,13 +237,8 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
-          activate-environment: tomviz-package
+          environment-file: packaging/environment.yml
           conda-remove-defaults: 'true'
-
-      - name: Install packaging tools
-        shell: bash -el {0}
-        run: |
-          conda install -y -c conda-forge conda-pack cmake
 
       - name: Build package
         shell: bash -el {0}
@@ -369,13 +352,8 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
-          activate-environment: tomviz-package
+          environment-file: packaging/environment.yml
           conda-remove-defaults: 'true'
-
-      - name: Install packaging tools
-        shell: bash -el {0}
-        run: |
-          conda install -y -c conda-forge conda-pack cmake
 
       - name: Build package
         shell: bash -el {0}

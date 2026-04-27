@@ -160,52 +160,55 @@ def cleanup_conda_pack_files(env_dir):
                 print(f"  Removed {os.path.relpath(path, env_dir)}")
 
 
+def stage_bundled_env(env_dir, bundle_env_dir):
+    """Move the unpacked conda env into its final bundle location and post-process it.
+
+    We deliberately skip `conda-unpack`: the launcher scripts set up PATH /
+    CONDA_PREFIX themselves, so hardcoded shebangs in the bundled env don't
+    matter, and re-running unpack would slow the build for no benefit.
+    """
+    if os.path.exists(bundle_env_dir):
+        shutil.rmtree(bundle_env_dir)
+    shutil.move(env_dir, bundle_env_dir)
+    cleanup_conda_pack_files(bundle_env_dir)
+    # conda-pack leaves hardcoded build-machine paths in qt.conf; rewrite them.
+    fix_qt_conf(bundle_env_dir)
+
+
+def install_launcher(src, dst, executable=True):
+    """Copy a launcher script into place, marking it executable on POSIX."""
+    shutil.copy2(src, dst)
+    if executable:
+        os.chmod(dst, 0o755)
+
+
 def post_process_darwin(env_dir, tomviz_version):
     """Create a macOS .app bundle."""
-    app_name = "tomviz"
-    app_dir = os.path.join(BUILD_DIR, "install", f"{app_name}.app")
+    app_dir = os.path.join(BUILD_DIR, "install", "tomviz.app")
     contents_dir = os.path.join(app_dir, "Contents")
     macos_dir = os.path.join(contents_dir, "MacOS")
     resources_dir = os.path.join(contents_dir, "Resources")
-    bundle_env_dir = os.path.join(contents_dir, "env")
 
     for d in [macos_dir, resources_dir]:
         os.makedirs(d, exist_ok=True)
 
-    # Move the environment into the bundle
-    if os.path.exists(bundle_env_dir):
-        shutil.rmtree(bundle_env_dir)
-    shutil.move(env_dir, bundle_env_dir)
+    stage_bundled_env(env_dir, os.path.join(contents_dir, "env"))
 
-    # Remove conda-pack leftovers that tomviz might scan
-    cleanup_conda_pack_files(bundle_env_dir)
+    install_launcher(
+        os.path.join(SCRIPT_DIR, "darwin", "launcher.sh"),
+        os.path.join(macos_dir, "tomviz"),
+    )
 
-    # Fix qt6.conf — conda-pack leaves hardcoded paths from the build machine.
-    # Replace with relative paths so Qt can find its plugins and resources.
-    fix_qt_conf(bundle_env_dir)
-
-    # Create the launcher script
-    launcher_path = os.path.join(macos_dir, "tomviz")
-    launcher_src = os.path.join(SCRIPT_DIR, "darwin", "launcher.sh")
-    shutil.copy2(launcher_src, launcher_path)
-    os.chmod(launcher_path, 0o755)
-
-    # Create Info.plist
+    # Render Info.plist from template
     plist_template = os.path.join(SCRIPT_DIR, "darwin", "Info.plist.in")
     with open(plist_template) as f:
-        plist = f.read()
-    plist = plist.replace("@VERSION@", tomviz_version)
+        plist = f.read().replace("@VERSION@", tomviz_version)
     with open(os.path.join(contents_dir, "Info.plist"), "w") as f:
         f.write(plist)
 
-    # Copy icon if it exists
     icon_src = os.path.join(SCRIPT_DIR, "darwin", "tomviz.icns")
     if os.path.exists(icon_src):
         shutil.copy2(icon_src, os.path.join(resources_dir, "tomviz.icns"))
-
-    # Note: we skip conda-unpack here. The launcher scripts set up the
-    # environment properly (PATH, CONDA_PREFIX, etc.), so hardcoded shebangs
-    # in the bundled env's scripts don't matter.
 
     return os.path.join(BUILD_DIR, "install")
 
@@ -215,27 +218,12 @@ def post_process_linux(env_dir, tomviz_version):
     install_dir = os.path.join(BUILD_DIR, "install", "tomviz")
     os.makedirs(install_dir, exist_ok=True)
 
-    # Move the environment
-    bundle_env_dir = os.path.join(install_dir, "env")
-    if os.path.exists(bundle_env_dir):
-        shutil.rmtree(bundle_env_dir)
-    shutil.move(env_dir, bundle_env_dir)
+    stage_bundled_env(env_dir, os.path.join(install_dir, "env"))
 
-    # Remove conda-pack leftovers
-    cleanup_conda_pack_files(bundle_env_dir)
-
-    # Fix qt6.conf
-    fix_qt_conf(bundle_env_dir)
-
-    # Create launcher script
-    launcher_src = os.path.join(SCRIPT_DIR, "linux", "tomviz.sh")
-    launcher_dst = os.path.join(install_dir, "tomviz")
-    shutil.copy2(launcher_src, launcher_dst)
-    os.chmod(launcher_dst, 0o755)
-
-    # Note: we skip conda-unpack here. The launcher scripts set up the
-    # environment properly (PATH, CONDA_PREFIX, etc.), so hardcoded shebangs
-    # in the bundled env's scripts don't matter.
+    install_launcher(
+        os.path.join(SCRIPT_DIR, "linux", "tomviz.sh"),
+        os.path.join(install_dir, "tomviz"),
+    )
 
     return os.path.join(BUILD_DIR, "install")
 
@@ -245,32 +233,21 @@ def post_process_windows(env_dir, tomviz_version):
     install_dir = os.path.join(BUILD_DIR, "install", "tomviz")
     os.makedirs(install_dir, exist_ok=True)
 
-    # Move the environment
     bundle_env_dir = os.path.join(install_dir, "env")
-    if os.path.exists(bundle_env_dir):
-        shutil.rmtree(bundle_env_dir)
-    shutil.move(env_dir, bundle_env_dir)
+    stage_bundled_env(env_dir, bundle_env_dir)
 
-    # Remove conda-pack leftovers
-    cleanup_conda_pack_files(bundle_env_dir)
-
-    # Fix qt6.conf
-    fix_qt_conf(bundle_env_dir)
-
-    # Remove directories not needed at runtime that cause Windows path length
-    # issues with WIX (deeply nested header files exceed 260 char limit)
+    # Trim directories that push paths past Windows' 260-char limit during WIX.
     for dirname in ["include", "mkspecs"]:
         remove_dir = os.path.join(bundle_env_dir, "Library", dirname)
         if os.path.exists(remove_dir):
             shutil.rmtree(remove_dir)
             print(f"  Removed {os.path.relpath(remove_dir, install_dir)}")
 
-    # Create launcher batch file
-    launcher_src = os.path.join(SCRIPT_DIR, "windows", "tomviz.bat")
-    shutil.copy2(launcher_src, os.path.join(install_dir, "tomviz.bat"))
-
-    # Note: we skip conda-unpack here. The launcher script (tomviz.bat) sets
-    # up the environment properly (PATH, CONDA_PREFIX, etc.).
+    install_launcher(
+        os.path.join(SCRIPT_DIR, "windows", "tomviz.bat"),
+        os.path.join(install_dir, "tomviz.bat"),
+        executable=False,
+    )
 
     return os.path.join(BUILD_DIR, "install")
 

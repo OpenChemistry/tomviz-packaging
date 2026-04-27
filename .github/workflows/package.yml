@@ -63,10 +63,18 @@ jobs:
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
-  build-macos-x64:
+  build-macos:
     needs: check-version
     if: needs.check-version.outputs.should_build == 'true'
-    runs-on: macos-15-intel  # x64 runner
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x86_64
+          - runner: macos-14
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -122,110 +130,16 @@ jobs:
           fi
 
       - name: Check artifact size
-        run: |
-          DMG=$(ls packaging/Tomviz-*.dmg 2>/dev/null | head -1)
-          if [ -z "$DMG" ]; then
-            echo "FAIL: No DMG found"
-            exit 1
-          fi
-          SIZE_MB=$(du -m "$DMG" | cut -f1)
-          echo "DMG size: ${SIZE_MB} MB"
-          if [ "$SIZE_MB" -lt 100 ]; then
-            echo "FAIL: DMG too small (${SIZE_MB} MB)"
-            exit 1
-          fi
-          echo "OK: DMG size is reasonable"
+        run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.dmg"
 
       - name: Rename artifact
         run: |
-          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-x86_64.dmg"
+          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-${{ matrix.arch }}.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-x86_64.dmg
-          path: packaging/Tomviz-*-x86_64.dmg
-
-  build-macos-arm64:
-    needs: check-version
-    if: needs.check-version.outputs.should_build == 'true'
-    runs-on: macos-14  # arm64 runner
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: conda-incubator/setup-miniconda@v3
-        with:
-          miniforge-version: latest
-          environment-file: packaging/environment.yml
-          conda-remove-defaults: 'true'
-
-      - name: Build package
-        shell: bash -el {0}
-        env:
-          TOMVIZ_VERSION: ${{ needs.check-version.outputs.tomviz_version }}
-          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
-        run: |
-          cd packaging
-          python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
-          # Retry cpack up to 3 times (hdiutil detach can fail transiently)
-          for attempt in 1 2 3; do
-            if cpack --config CPackConfig.cmake; then
-              break
-            fi
-            echo "CPack attempt $attempt failed, retrying in 10s..."
-            rm -rf _CPack_Packages
-            sleep 10
-          done
-
-      - name: Verify package (structural)
-        shell: bash -el {0}
-        env:
-          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
-        run: |
-          cd packaging
-          APP_DIR=$(find _build/install -name "*.app" -type d | head -1)
-          python verify.py "$APP_DIR" --python-version "$TOMVIZ_PYTHON_VERSION"
-
-      - name: Verify package (smoke test via launcher)
-        run: |
-          APP_DIR=$(find packaging/_build/install -name "*.app" -type d | head -1)
-          "$APP_DIR/Contents/MacOS/tomviz" &
-          PID=$!
-          sleep 10
-
-          if kill -0 "$PID" 2>/dev/null; then
-            echo "OK: tomviz process $PID is running after 10s"
-            kill "$PID" || true
-            wait "$PID" 2>/dev/null || true
-          else
-            wait "$PID" 2>/dev/null
-            EXIT_CODE=$?
-            echo "FAIL: tomviz exited early with code $EXIT_CODE"
-            exit 1
-          fi
-
-      - name: Check artifact size
-        run: |
-          DMG=$(ls packaging/Tomviz-*.dmg 2>/dev/null | head -1)
-          if [ -z "$DMG" ]; then
-            echo "FAIL: No DMG found"
-            exit 1
-          fi
-          SIZE_MB=$(du -m "$DMG" | cut -f1)
-          echo "DMG size: ${SIZE_MB} MB"
-          if [ "$SIZE_MB" -lt 100 ]; then
-            echo "FAIL: DMG too small (${SIZE_MB} MB)"
-            exit 1
-          fi
-          echo "OK: DMG size is reasonable"
-
-      - name: Rename artifact
-        run: |
-          mv packaging/Tomviz-*.dmg "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}-arm64.dmg"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-arm64.dmg
-          path: packaging/Tomviz-*-arm64.dmg
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}-${{ matrix.arch }}.dmg
+          path: packaging/Tomviz-*-${{ matrix.arch }}.dmg
 
   build-windows:
     needs: check-version
@@ -317,20 +231,8 @@ jobs:
       - name: Check artifact sizes
         shell: bash
         run: |
-          for ext in zip msi; do
-            FILE=$(ls packaging/Tomviz-*.$ext 2>/dev/null | head -1)
-            if [ -z "$FILE" ]; then
-              echo "FAIL: No .$ext found"
-              exit 1
-            fi
-            SIZE_MB=$(du -m "$FILE" | cut -f1)
-            echo "$ext size: ${SIZE_MB} MB"
-            if [ "$SIZE_MB" -lt 100 ]; then
-              echo "FAIL: $ext too small (${SIZE_MB} MB)"
-              exit 1
-            fi
-            echo "OK: $ext size is reasonable"
-          done
+          bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.zip"
+          bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.msi"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -380,19 +282,7 @@ jobs:
           "$ENV_DIR/bin/python" .github/scripts/verify_imports.py
 
       - name: Check artifact size
-        run: |
-          TGZ=$(ls packaging/Tomviz-*.tar.gz 2>/dev/null | head -1)
-          if [ -z "$TGZ" ]; then
-            echo "FAIL: No tar.gz found"
-            exit 1
-          fi
-          SIZE_MB=$(du -m "$TGZ" | cut -f1)
-          echo "tar.gz size: ${SIZE_MB} MB"
-          if [ "$SIZE_MB" -lt 100 ]; then
-            echo "FAIL: tar.gz too small (${SIZE_MB} MB)"
-            exit 1
-          fi
-          echo "OK: tar.gz size is reasonable"
+        run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.tar.gz"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -400,7 +290,7 @@ jobs:
           path: packaging/Tomviz-*.tar.gz
 
   create-release:
-    needs: [check-version, build-macos-x64, build-macos-arm64, build-windows, build-linux]
+    needs: [check-version, build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write

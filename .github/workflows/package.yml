@@ -264,8 +264,9 @@ jobs:
           LOG_WIN=$(cygpath -w "$LOG")
 
           echo "Installing $MSI ..."
-          if ! msiexec.exe //i "$MSI_WIN" //qn '//l*v' "$LOG_WIN"; then
-            echo "FAIL: msiexec install failed"
+          # Use `timeout` so a hung msiexec doesn't burn the whole job slot.
+          if ! timeout 600 msiexec.exe //i "$MSI_WIN" //qn '//l*v' "$LOG_WIN"; then
+            echo "FAIL: msiexec install failed or timed out"
             cat "$LOG" 2>/dev/null | tail -100 || true
             exit 1
           fi
@@ -283,10 +284,16 @@ jobs:
 
           bash .github/scripts/smoke_test_launcher.sh "$INSTALL_DIR/tomviz.bat"
 
+          # The smoke test backgrounds tomviz.bat (cmd.exe wrapper) — killing
+          # the wrapper does not always kill the child tomviz.exe, which would
+          # then hold installed files open and hang the uninstall.
+          taskkill.exe //F //IM tomviz.exe 2>/dev/null || true
+          taskkill.exe //F //IM cmd.exe //FI "WINDOWTITLE eq tomviz.bat*" 2>/dev/null || true
+
           echo "Uninstalling..."
           UNINSTALL_LOG="$RUNNER_TEMP/msi-uninstall.log"
-          if ! msiexec.exe //x "$MSI_WIN" //qn '//l*v' "$(cygpath -w "$UNINSTALL_LOG")"; then
-            echo "FAIL: msiexec uninstall failed"
+          if ! timeout 600 msiexec.exe //x "$MSI_WIN" //qn '//l*v' "$(cygpath -w "$UNINSTALL_LOG")"; then
+            echo "FAIL: msiexec uninstall failed or timed out"
             tail -100 "$UNINSTALL_LOG" 2>/dev/null || true
             exit 1
           fi
@@ -357,7 +364,10 @@ jobs:
 
       - name: Verify package (smoke test via extracted tar.gz)
         env:
-          QT_QPA_PLATFORM: offscreen
+          # Force Mesa software rendering — the runner has no EGL device, so
+          # VTK's vtkEGLRenderWindow segfaults in MainWindow construction.
+          # xvfb-run gives Qt/VTK a real X display so they take the GLX path.
+          LIBGL_ALWAYS_SOFTWARE: 1
         run: |
           TGZ=$(ls packaging/Tomviz-*.tar.gz | head -1)
           EXTRACT="$RUNNER_TEMP/tomviz-extracted"
@@ -373,7 +383,7 @@ jobs:
             ls -la "$EXTRACT/tomviz/" || true
             exit 1
           fi
-          bash .github/scripts/smoke_test_launcher.sh "$LAUNCHER"
+          xvfb-run -a bash .github/scripts/smoke_test_launcher.sh "$LAUNCHER"
 
       - name: Check artifact size
         run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.tar.gz"

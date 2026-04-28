@@ -17,9 +17,7 @@ import os
 import platform
 import shutil
 import subprocess
-import sys
 import tarfile
-import tempfile
 import zipfile
 
 

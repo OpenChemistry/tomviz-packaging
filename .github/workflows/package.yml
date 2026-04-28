@@ -114,20 +114,7 @@ jobs:
       - name: Verify package (smoke test via launcher)
         run: |
           APP_DIR=$(find packaging/_build/install -name "*.app" -type d | head -1)
-          "$APP_DIR/Contents/MacOS/tomviz" &
-          PID=$!
-          sleep 10
-
-          if kill -0 "$PID" 2>/dev/null; then
-            echo "OK: tomviz process $PID is running after 10s"
-            kill "$PID" || true
-            wait "$PID" 2>/dev/null || true
-          else
-            wait "$PID" 2>/dev/null
-            EXIT_CODE=$?
-            echo "FAIL: tomviz exited early with code $EXIT_CODE"
-            exit 1
-          fi
+          bash .github/scripts/smoke_test_launcher.sh "$APP_DIR/Contents/MacOS/tomviz"
 
       - name: Check artifact size
         run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.dmg"
@@ -147,6 +134,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Add dumpbin (from MSVC) to PATH so verify.py can check DLL deps.
+      # Uses Microsoft's vswhere (first-party, pre-installed on the runner) to
+      # locate the latest MSVC toolset; no third-party action involved.
+      - name: Add MSVC dumpbin to PATH
+        shell: bash
+        run: |
+          VSWHERE="C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe"
+          VS_PATH=$("$VSWHERE" -latest -property installationPath)
+          MSVC_VER=$(ls "$VS_PATH/VC/Tools/MSVC" | sort -V | tail -1)
+          DUMPBIN_DIR="$VS_PATH/VC/Tools/MSVC/$MSVC_VER/bin/Hostx64/x64"
+          if [ ! -x "$DUMPBIN_DIR/dumpbin.exe" ]; then
+            echo "FAIL: dumpbin not found at $DUMPBIN_DIR"
+            exit 1
+          fi
+          echo "Adding to PATH: $DUMPBIN_DIR"
+          echo "$DUMPBIN_DIR" >> "$GITHUB_PATH"
 
       - uses: conda-incubator/setup-miniconda@v3
         with:
@@ -183,6 +187,12 @@ jobs:
           ENV_DIR="packaging/_build/install/tomviz/env"
           echo "=== Testing Python imports ==="
           "$ENV_DIR/python.exe" .github/scripts/verify_imports.py
+
+      - name: Verify package (smoke test via launcher)
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: bash .github/scripts/smoke_test_launcher.sh packaging/_build/install/tomviz/tomviz.bat
 
       - name: Verify Qt plugins
         shell: bash
@@ -281,6 +291,11 @@ jobs:
           echo "=== Testing Python imports ==="
           "$ENV_DIR/bin/python" .github/scripts/verify_imports.py
 
+      - name: Verify package (smoke test via launcher)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: bash .github/scripts/smoke_test_launcher.sh packaging/_build/install/tomviz/tomviz
+
       - name: Check artifact size
         run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.tar.gz"
 
@@ -312,9 +327,8 @@ jobs:
           VERSION: ${{ needs.check-version.outputs.tomviz_version }}
           BUILD_STRING: ${{ needs.check-version.outputs.build_string }}
         run: |
-          # Delete existing release if present
+          # Delete existing release if present (the tag is reused, which is fine for our flow).
           gh release delete "v${VERSION}" --repo "${{ github.repository }}" -y 2>/dev/null || true
-          git push --delete origin "v${VERSION}" 2>/dev/null || true
 
           gh release create "v${VERSION}" release/* \
             --repo "${{ github.repository }}" \

@@ -111,10 +111,31 @@ jobs:
           APP_DIR=$(find _build/install -name "*.app" -type d | head -1)
           python verify.py "$APP_DIR" --python-version "$TOMVIZ_PYTHON_VERSION"
 
-      - name: Verify package (smoke test via launcher)
+      - name: Verify package (smoke test via mounted DMG)
         run: |
-          APP_DIR=$(find packaging/_build/install -name "*.app" -type d | head -1)
-          bash .github/scripts/smoke_test_launcher.sh "$APP_DIR/Contents/MacOS/tomviz"
+          DMG=$(ls packaging/Tomviz-*.dmg | head -1)
+          echo "Mounting $DMG ..."
+          MOUNT_POINT=$(hdiutil attach "$DMG" -nobrowse -readonly -plist | /usr/bin/python3 -c "
+          import sys, plistlib
+          data = plistlib.loads(sys.stdin.buffer.read())
+          for e in data.get('system-entities', []):
+              if 'mount-point' in e:
+                  print(e['mount-point']); break
+          ")
+          if [ -z "$MOUNT_POINT" ]; then
+            echo "FAIL: could not determine DMG mount point"
+            exit 1
+          fi
+          trap 'hdiutil detach "$MOUNT_POINT" 2>/dev/null || true' EXIT
+          echo "Mounted at: $MOUNT_POINT"
+
+          APP="$MOUNT_POINT/tomviz.app"
+          if [ ! -d "$APP" ]; then
+            echo "FAIL: tomviz.app not found in DMG"
+            ls "$MOUNT_POINT" || true
+            exit 1
+          fi
+          bash .github/scripts/smoke_test_launcher.sh "$APP/Contents/MacOS/tomviz"
 
       - name: Check artifact size
         run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.dmg"
@@ -188,12 +209,6 @@ jobs:
           echo "=== Testing Python imports ==="
           "$ENV_DIR/python.exe" .github/scripts/verify_imports.py
 
-      - name: Verify package (smoke test via launcher)
-        shell: bash
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: bash .github/scripts/smoke_test_launcher.sh packaging/_build/install/tomviz/tomviz.bat
-
       - name: Verify Qt plugins
         shell: bash
         run: |
@@ -237,6 +252,55 @@ jobs:
             }
           "
           echo "OK: MSI properties verified"
+
+      - name: Verify package (smoke test via MSI install)
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          MSI=$(ls packaging/Tomviz-*.msi | head -1)
+          MSI_WIN=$(cygpath -w "$MSI")
+          LOG="$RUNNER_TEMP/msi-install.log"
+          LOG_WIN=$(cygpath -w "$LOG")
+
+          echo "Installing $MSI ..."
+          if ! msiexec.exe //i "$MSI_WIN" //qn //l*v "$LOG_WIN"; then
+            echo "FAIL: msiexec install failed"
+            cat "$LOG" 2>/dev/null | tail -100 || true
+            exit 1
+          fi
+
+          # The WIX template writes the install dir to this registry value.
+          INSTALL_DIR_WIN=$(powershell.exe -Command "(Get-ItemProperty 'HKLM:\Software\Kitware\Tomviz').InstallDir" | tr -d '\r')
+          INSTALL_DIR=$(cygpath "$INSTALL_DIR_WIN")
+          echo "Installed at: $INSTALL_DIR"
+
+          if [ ! -f "$INSTALL_DIR/tomviz.bat" ]; then
+            echo "FAIL: tomviz.bat not at expected install path"
+            ls "$INSTALL_DIR" || true
+            exit 1
+          fi
+
+          bash .github/scripts/smoke_test_launcher.sh "$INSTALL_DIR/tomviz.bat"
+
+          echo "Uninstalling..."
+          UNINSTALL_LOG="$RUNNER_TEMP/msi-uninstall.log"
+          if ! msiexec.exe //x "$MSI_WIN" //qn //l*v "$(cygpath -w "$UNINSTALL_LOG")"; then
+            echo "FAIL: msiexec uninstall failed"
+            tail -100 "$UNINSTALL_LOG" 2>/dev/null || true
+            exit 1
+          fi
+
+          if [ -f "$INSTALL_DIR/tomviz.bat" ]; then
+            echo "FAIL: tomviz.bat still present after uninstall"
+            exit 1
+          fi
+          REG_LEFT=$(powershell.exe -Command "Test-Path 'HKLM:\Software\Kitware\Tomviz'" | tr -d '\r')
+          if [ "$REG_LEFT" = "True" ]; then
+            echo "FAIL: HKLM\\Software\\Kitware\\Tomviz registry key still present after uninstall"
+            exit 1
+          fi
+          echo "OK: install + uninstall cycle clean"
 
       - name: Check artifact sizes
         shell: bash
@@ -291,10 +355,24 @@ jobs:
           echo "=== Testing Python imports ==="
           "$ENV_DIR/bin/python" .github/scripts/verify_imports.py
 
-      - name: Verify package (smoke test via launcher)
+      - name: Verify package (smoke test via extracted tar.gz)
         env:
           QT_QPA_PLATFORM: offscreen
-        run: bash .github/scripts/smoke_test_launcher.sh packaging/_build/install/tomviz/tomviz
+        run: |
+          TGZ=$(ls packaging/Tomviz-*.tar.gz | head -1)
+          EXTRACT="$RUNNER_TEMP/tomviz-extracted"
+          rm -rf "$EXTRACT"
+          mkdir -p "$EXTRACT"
+          echo "Extracting $TGZ to $EXTRACT ..."
+          tar -xzf "$TGZ" -C "$EXTRACT"
+
+          LAUNCHER="$EXTRACT/tomviz/tomviz"
+          if [ ! -x "$LAUNCHER" ]; then
+            echo "FAIL: launcher not executable at $LAUNCHER"
+            ls -la "$EXTRACT/tomviz/" || true
+            exit 1
+          fi
+          bash .github/scripts/smoke_test_launcher.sh "$LAUNCHER"
 
       - name: Check artifact size
         run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.tar.gz"

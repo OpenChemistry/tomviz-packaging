@@ -241,13 +241,22 @@ class Verifier:
                 self.error(f"{name}: dumpbin failed: {result.stderr.strip()}")
                 continue
 
-            # dumpbin prints one DLL per line, indented, in the Image has the
-            # following dependencies section. Match anything ending in .dll.
+            # dumpbin prints dependencies under an "Image has the following
+            # dependencies:" header, one DLL per indented line, ended by a blank
+            # line. Only parse inside that section — the header preamble
+            # ("Dump of file <path>.dll") would otherwise be misread as a dep.
             deps = []
+            in_section = False
             for line in result.stdout.splitlines():
-                line = line.strip()
-                if line.lower().endswith(".dll"):
-                    deps.append(line)
+                stripped = line.strip()
+                if not in_section:
+                    if "following dependencies" in stripped.lower():
+                        in_section = True
+                    continue
+                if not stripped:
+                    break
+                if stripped.lower().endswith(".dll"):
+                    deps.append(stripped)
 
             missing = []
             for dll in deps:

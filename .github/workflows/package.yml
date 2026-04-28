@@ -364,7 +364,8 @@ jobs:
           rm -rf "$EXTRACT"
           mkdir -p "$EXTRACT"
           echo "Extracting $TGZ to $EXTRACT ..."
-          tar -xzf "$TGZ" -C "$EXTRACT"
+          # CPack wraps the contents in a Tomviz-${VERSION}/ directory; strip it.
+          tar -xzf "$TGZ" -C "$EXTRACT" --strip-components=1
 
           LAUNCHER="$EXTRACT/tomviz/tomviz"
           if [ ! -x "$LAUNCHER" ]; then

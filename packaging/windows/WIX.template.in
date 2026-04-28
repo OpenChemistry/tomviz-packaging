@@ -38,7 +38,8 @@
 
         <DirectoryRef Id="TARGETDIR">
             <Component Id="TomvizRegistry">
-                <RegistryKey Root="HKLM" Key="Software\Kitware\Tomviz">
+                <RegistryKey Root="HKLM" Key="Software\Kitware\Tomviz"
+                    Action="createAndRemoveOnUninstall">
                     <RegistryValue Type="string" Name="InstallDir"
                         Value="[INSTALL_ROOT]" KeyPath="yes"/>
                  </RegistryKey>

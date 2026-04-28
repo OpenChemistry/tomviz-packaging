@@ -264,7 +264,7 @@ jobs:
           LOG_WIN=$(cygpath -w "$LOG")
 
           echo "Installing $MSI ..."
-          if ! msiexec.exe //i "$MSI_WIN" //qn //l*v "$LOG_WIN"; then
+          if ! msiexec.exe //i "$MSI_WIN" //qn '//l*v' "$LOG_WIN"; then
             echo "FAIL: msiexec install failed"
             cat "$LOG" 2>/dev/null | tail -100 || true
             exit 1
@@ -285,7 +285,7 @@ jobs:
 
           echo "Uninstalling..."
           UNINSTALL_LOG="$RUNNER_TEMP/msi-uninstall.log"
-          if ! msiexec.exe //x "$MSI_WIN" //qn //l*v "$(cygpath -w "$UNINSTALL_LOG")"; then
+          if ! msiexec.exe //x "$MSI_WIN" //qn '//l*v' "$(cygpath -w "$UNINSTALL_LOG")"; then
             echo "FAIL: msiexec uninstall failed"
             tail -100 "$UNINSTALL_LOG" 2>/dev/null || true
             exit 1

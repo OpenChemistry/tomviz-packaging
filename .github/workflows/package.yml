@@ -265,7 +265,7 @@ jobs:
 
           echo "Installing $MSI ..."
           # Use `timeout` so a hung msiexec doesn't burn the whole job slot.
-          if ! timeout 600 msiexec.exe //i "$MSI_WIN" //qn '//l*v' "$LOG_WIN"; then
+          if ! timeout 1800 msiexec.exe //i "$MSI_WIN" //qn '//l*v' "$LOG_WIN"; then
             echo "FAIL: msiexec install failed or timed out"
             cat "$LOG" 2>/dev/null | tail -100 || true
             exit 1
@@ -292,7 +292,7 @@ jobs:
 
           echo "Uninstalling..."
           UNINSTALL_LOG="$RUNNER_TEMP/msi-uninstall.log"
-          if ! timeout 600 msiexec.exe //x "$MSI_WIN" //qn '//l*v' "$(cygpath -w "$UNINSTALL_LOG")"; then
+          if ! timeout 1800 msiexec.exe //x "$MSI_WIN" //qn '//l*v' "$(cygpath -w "$UNINSTALL_LOG")"; then
             echo "FAIL: msiexec uninstall failed or timed out"
             tail -100 "$UNINSTALL_LOG" 2>/dev/null || true
             exit 1

@@ -242,8 +242,9 @@ class Verifier:
                 continue
 
             # dumpbin prints dependencies under an "Image has the following
-            # dependencies:" header, one DLL per indented line, ended by a blank
-            # line. Only parse inside that section — the header preamble
+            # dependencies:" header, with a blank line before the first DLL
+            # and one DLL per indented line. The "Summary" section follows.
+            # Only parse inside that section — the header preamble
             # ("Dump of file <path>.dll") would otherwise be misread as a dep.
             deps = []
             in_section = False
@@ -254,9 +255,11 @@ class Verifier:
                         in_section = True
                     continue
                 if not stripped:
-                    break
+                    continue  # blank lines inside the deps section are noise
                 if stripped.lower().endswith(".dll"):
                     deps.append(stripped)
+                else:
+                    break  # first non-blank, non-DLL line ends the section
 
             missing = []
             for dll in deps:

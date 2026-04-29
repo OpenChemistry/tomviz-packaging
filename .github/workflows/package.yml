@@ -156,6 +156,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Defender real-time scanning would scan every file extracted from the
+      # ~3GB MSI during install, adding tens of minutes. The runner is
+      # ephemeral and Administrator, so disabling it here is safe.
+      - name: Disable Windows Defender real-time scanning
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       # Add dumpbin (from MSVC) to PATH so verify.py can check DLL deps.
       # Uses Microsoft's vswhere (first-party, pre-installed on the runner) to
       # locate the latest MSVC toolset; no third-party action involved.
@@ -265,7 +272,9 @@ jobs:
 
           echo "Installing $MSI ..."
           # Use `timeout` so a hung msiexec doesn't burn the whole job slot.
-          if ! timeout 1800 msiexec.exe //i "$MSI_WIN" //qn '//l*v' "$LOG_WIN"; then
+          # `/l*` (no `v`) avoids writing 100s of MB of verbose log for a 3GB
+          # install — that disk IO was a major factor in the previous timeouts.
+          if ! timeout 1800 msiexec.exe //i "$MSI_WIN" //qn '//l*' "$LOG_WIN"; then
             echo "FAIL: msiexec install failed or timed out"
             cat "$LOG" 2>/dev/null | tail -100 || true
             exit 1
@@ -375,10 +384,12 @@ jobs:
 
       - name: Verify package (smoke test via extracted tar.gz)
         env:
-          QT_QPA_PLATFORM: offscreen
+          # VTK's vtkXOpenGLRenderWindow needs a real X DISPLAY (the Qt
+          # offscreen platform alone is not enough — VTK opens its own X
+          # connection). xvfb-run provides one. With LIBGL_ALWAYS_SOFTWARE
+          # plus the system DRI drivers we just installed, GLX uses Mesa
+          # llvmpipe instead of needing a GPU.
           LIBGL_ALWAYS_SOFTWARE: 1
-          # Point conda's bundled libGL at the system DRI software drivers
-          # (llvmpipe) — the conda env doesn't ship them.
           LIBGL_DRIVERS_PATH: /usr/lib/x86_64-linux-gnu/dri
         run: |
           TGZ=$(ls packaging/Tomviz-*.tar.gz | head -1)
@@ -395,7 +406,7 @@ jobs:
             ls -la "$EXTRACT/tomviz/" || true
             exit 1
           fi
-          bash .github/scripts/smoke_test_launcher.sh "$LAUNCHER"
+          xvfb-run -a bash .github/scripts/smoke_test_launcher.sh "$LAUNCHER"
 
       - name: Check artifact size
         run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.tar.gz"

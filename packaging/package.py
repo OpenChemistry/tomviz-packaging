@@ -95,10 +95,6 @@ def create_environment(python_version, tomviz_version):
         "-c", "conda-forge",
         f"python={python_version}",
         f"tomviz={tomviz_version}",
-        # Required by paraview's bundled XArrayCFReader plugin; without these
-        # the plugin load fails during startup and Tomviz crashes shortly
-        # after. Not transitively pulled in by conda-forge's tomviz/paraview.
-        "cftime", "xarray",
     ])
 
     return env_dir

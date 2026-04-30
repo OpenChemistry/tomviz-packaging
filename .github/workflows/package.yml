@@ -335,23 +335,17 @@ jobs:
           echo "=== Testing Python imports ==="
           "$ENV_DIR/bin/python" .github/scripts/verify_imports.py
 
-      - name: Verify package (extract tar.gz)
+      - name: Verify package (smoke test via extracted tar.gz)
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
-          # We extract the tarball and verify the launcher is in place, but
-          # we do NOT launch the GUI here. Tomviz's MainWindow construction
-          # reproducibly segfaults under every headless-Linux configuration
-          # we tried (Qt offscreen, xvfb-run, system Mesa with DRI software
-          # drivers + LIBGL_ALWAYS_SOFTWARE). The crash is inside Tomviz's
-          # own code — a Tomviz/VTK issue with software OpenGL, not a
-          # packaging issue — so it doesn't make sense to gate this
-          # workflow on it. macOS and Windows GUI smoke tests cover the
-          # launch-and-stay-running signal.
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libegl1 libgl1-mesa-dri libglx-mesa0 >/dev/null 2>&1
+
           TGZ=$(ls packaging/Tomviz-*.tar.gz | head -1)
           EXTRACT="$RUNNER_TEMP/tomviz-extracted"
           rm -rf "$EXTRACT"
           mkdir -p "$EXTRACT"
           echo "Extracting $TGZ to $EXTRACT ..."
-          # CPack wraps the contents in a Tomviz-${VERSION}/ directory; strip it.
           tar -xzf "$TGZ" -C "$EXTRACT" --strip-components=1
 
           LAUNCHER="$EXTRACT/tomviz/tomviz"
@@ -361,6 +355,7 @@ jobs:
             exit 1
           fi
           echo "OK: launcher is executable at $LAUNCHER"
+          xvfb-run -a bash .github/scripts/smoke_test_launcher.sh "$LAUNCHER"
 
       - name: Check artifact size
         run: bash .github/scripts/check_artifact_size.sh "packaging/Tomviz-*.tar.gz"

@@ -9,7 +9,7 @@ Intended to be run with the bundled interpreter from a packaged install, e.g.:
 
 import importlib
 
-REQUIRED = [
+REQUIRED: list[str] = [
     "tomviz",
     "tomviz.cli",
     "tomviz._wrapping",
@@ -20,7 +20,7 @@ REQUIRED = [
 ]
 
 
-def main():
+def main() -> None:
     for mod in REQUIRED:
         importlib.import_module(mod)
         print(f"  OK: import {mod}")

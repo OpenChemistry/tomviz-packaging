@@ -13,22 +13,25 @@ Example:
     python latest_conda_forge_tomviz.py 3.13
 """
 
+from __future__ import annotations
+
 import json
 import sys
 import urllib.request
+from typing import Any
 
 
 API_URL = "https://api.anaconda.org/package/conda-forge/tomviz"
 SUBDIR = "linux-64"
 
 
-def main():
+def main() -> None:
     if len(sys.argv) != 2:
         sys.exit(f"usage: {sys.argv[0]} <python_version>")
     python_version = sys.argv[1]
     py_prefix = "py" + python_version.replace(".", "")
 
-    data = json.loads(urllib.request.urlopen(API_URL).read())
+    data: dict[str, Any] = json.loads(urllib.request.urlopen(API_URL).read())
     files = [
         f for f in data.get("files", [])
         if f.get("attrs", {}).get("subdir") == SUBDIR
@@ -42,7 +45,7 @@ def main():
     if not matching:
         sys.exit(f"No tomviz packages found for {SUBDIR} on conda-forge")
 
-    def ver_key(f):
+    def ver_key(f: dict[str, Any]) -> tuple[tuple[int, ...], int]:
         parts = tuple(int(x) for x in f["version"].split(".") if x.isdigit())
         return (parts, f["attrs"].get("build_number", 0))
 

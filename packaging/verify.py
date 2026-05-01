@@ -8,6 +8,8 @@ Checks:
 4. Artifact size: within expected range
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import platform
@@ -69,25 +71,25 @@ MAX_SIZE_MB = 8000
 
 
 class Verifier:
-    def __init__(self, install_dir, python_version="3.13"):
-        self.install_dir = os.path.abspath(install_dir)
-        self.python_version = python_version
-        self.errors = []
-        self.warnings = []
-        self.system = platform.system()
+    def __init__(self, install_dir: str, python_version: str = "3.13") -> None:
+        self.install_dir: str = os.path.abspath(install_dir)
+        self.python_version: str = python_version
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+        self.system: str = platform.system()
 
-    def error(self, msg):
+    def error(self, msg: str) -> None:
         self.errors.append(msg)
         print(f"  FAIL: {msg}")
 
-    def warn(self, msg):
+    def warn(self, msg: str) -> None:
         self.warnings.append(msg)
         print(f"  WARN: {msg}")
 
-    def ok(self, msg):
+    def ok(self, msg: str) -> None:
         print(f"  OK:   {msg}")
 
-    def check_structure(self):
+    def check_structure(self) -> None:
         """Verify expected files and directories exist."""
         print("\n=== Structural Checks ===")
 
@@ -124,7 +126,7 @@ class Verifier:
             else:
                 self.error(f"Missing directory: {d}")
 
-    def check_binary_type(self):
+    def check_binary_type(self) -> None:
         """Verify the main executable is the correct binary type."""
         print("\n=== Binary Type Checks ===")
 
@@ -164,7 +166,7 @@ class Verifier:
                 else:
                     self.error(f"tomviz is not an ELF executable: {output.strip()}")
 
-    def check_library_deps(self):
+    def check_library_deps(self) -> None:
         """Check for missing shared library dependencies."""
         print("\n=== Library Dependency Checks ===")
 
@@ -173,7 +175,7 @@ class Verifier:
         else:
             self._check_library_deps_unix()
 
-    def _check_library_deps_unix(self):
+    def _check_library_deps_unix(self) -> None:
         is_app_bundle = (self.system == "Darwin" and
                          os.path.exists(os.path.join(self.install_dir, "Contents")))
 
@@ -213,7 +215,7 @@ class Verifier:
             else:
                 self.ok(f"{name}: all library dependencies resolved")
 
-    def _check_library_deps_windows(self):
+    def _check_library_deps_windows(self) -> None:
         if not shutil.which("dumpbin"):
             self.error("dumpbin not found on PATH — cannot verify DLL dependencies")
             return
@@ -275,7 +277,7 @@ class Verifier:
                 self.ok(f"{name}: all non-system DLL dependencies found "
                         f"({len(deps)} checked)")
 
-    def check_prefix_leaks(self):
+    def check_prefix_leaks(self) -> None:
         """Check for conda build prefixes left in text files."""
         print("\n=== Prefix Leak Checks ===")
 
@@ -328,7 +330,7 @@ class Verifier:
         else:
             self.warn(f"Found {leaked} files with possible prefix leaks")
 
-    def check_size(self):
+    def check_size(self) -> None:
         """Check total size is within expected range."""
         print("\n=== Size Check ===")
 
@@ -345,7 +347,7 @@ class Verifier:
         else:
             self.ok(f"Install size: {size_mb:.0f} MB (within {MIN_SIZE_MB}-{MAX_SIZE_MB} MB range)")
 
-    def run_all(self):
+    def run_all(self) -> bool:
         """Run all verification checks."""
         print(f"Verifying Tomviz install at: {self.install_dir}")
         print(f"Platform: {self.system}")
@@ -368,7 +370,7 @@ class Verifier:
         return True
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Verify Tomviz standalone install")
     parser.add_argument("install_dir", help="Path to the install directory or .app bundle")
     parser.add_argument("--python-version", default="3.13")

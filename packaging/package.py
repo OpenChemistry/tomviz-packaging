@@ -11,6 +11,8 @@ Usage:
     python package.py [--python-version 3.13] [--tomviz-version 2.3.1]
 """
 
+from __future__ import annotations
+
 import argparse
 import fnmatch
 import glob
@@ -21,18 +23,19 @@ import shutil
 import subprocess
 import tarfile
 import zipfile
+from typing import Any
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BUILD_DIR = os.path.join(SCRIPT_DIR, "_build")
 
 
-def run(cmd, **kwargs):
+def run(cmd: list[str], **kwargs: Any) -> None:
     print(f"  >> {' '.join(cmd)}")
     subprocess.check_call(cmd, **kwargs)
 
 
-def get_conda_cmd():
+def get_conda_cmd() -> str:
     """Find conda/mamba/micromamba (including .bat variants on Windows)."""
     candidates = ["mamba", "conda", "micromamba"]
     if platform.system() == "Windows":
@@ -44,7 +47,7 @@ def get_conda_cmd():
     raise RuntimeError("No conda/mamba/micromamba found in PATH")
 
 
-def query_latest_version(python_version):
+def query_latest_version(python_version: str) -> tuple[str, str]:
     """Query conda-forge for the latest tomviz version."""
     conda = get_conda_cmd()
     result = subprocess.run(
@@ -54,8 +57,8 @@ def query_latest_version(python_version):
     if result.returncode != 0:
         raise RuntimeError(
             f"conda search failed (exit {result.returncode}): {result.stderr}")
-    data = json.loads(result.stdout)
-    packages = data.get("tomviz", [])
+    data: dict[str, Any] = json.loads(result.stdout)
+    packages: list[dict[str, Any]] = data.get("tomviz", [])
 
     # Filter to the requested python version
     py_prefix = f"py{python_version.replace('.', '')}"
@@ -69,8 +72,8 @@ def query_latest_version(python_version):
         raise RuntimeError("No tomviz packages found on conda-forge")
 
     # Sort by version (as int tuples) and build number to get the latest
-    def version_key(p):
-        parts = []
+    def version_key(p: dict[str, Any]) -> tuple[tuple[int, ...], int]:
+        parts: list[int] = []
         for x in p["version"].split("."):
             try:
                 parts.append(int(x))
@@ -82,7 +85,7 @@ def query_latest_version(python_version):
     return latest["version"], latest["build"]
 
 
-def create_environment(python_version, tomviz_version):
+def create_environment(python_version: str, tomviz_version: str) -> str:
     """Create a conda environment with tomviz installed."""
     conda = get_conda_cmd()
     env_dir = os.path.join(BUILD_DIR, "env")
@@ -110,7 +113,7 @@ def create_environment(python_version, tomviz_version):
     return env_dir
 
 
-def conda_pack_env(env_dir):
+def conda_pack_env(env_dir: str) -> str:
     """Use conda-pack to create a relocatable archive."""
     is_windows = platform.system() == "Windows"
     ext = "zip" if is_windows else "tar.gz"
@@ -127,7 +130,7 @@ def conda_pack_env(env_dir):
     return archive_path
 
 
-def extract_archive(archive_path, dest_dir):
+def extract_archive(archive_path: str, dest_dir: str) -> str:
     """Extract the conda-pack archive."""
     print(f"Extracting {archive_path} to {dest_dir}")
     if os.path.exists(dest_dir):
@@ -145,7 +148,7 @@ def extract_archive(archive_path, dest_dir):
     return dest_dir
 
 
-def fix_qt_conf(env_dir):
+def fix_qt_conf(env_dir: str) -> None:
     """Fix qt6.conf to use relative paths instead of hardcoded build paths."""
     for conf_name in ["qt6.conf", "qt.conf"]:
         for subdir in ["bin", "Library/bin"]:
@@ -158,7 +161,7 @@ def fix_qt_conf(env_dir):
                 break
 
 
-def cleanup_conda_pack_files(env_dir):
+def cleanup_conda_pack_files(env_dir: str) -> None:
     """Remove conda-pack leftover files that tomviz might pick up as operators."""
     for name in ["conda_unpack_progress.py", "conda-unpack"]:
         for subdir in ["bin", "Scripts"]:
@@ -168,7 +171,7 @@ def cleanup_conda_pack_files(env_dir):
                 print(f"  Removed {os.path.relpath(path, env_dir)}")
 
 
-def stage_bundled_env(env_dir, bundle_env_dir):
+def stage_bundled_env(env_dir: str, bundle_env_dir: str) -> None:
     """Move the unpacked conda env into its final bundle location and post-process it.
 
     We deliberately skip `conda-unpack`: the launcher scripts set up PATH /
@@ -183,7 +186,7 @@ def stage_bundled_env(env_dir, bundle_env_dir):
     fix_qt_conf(bundle_env_dir)
 
 
-def _dir_size(path):
+def _dir_size(path: str) -> int:
     total = 0
     for dirpath, _, filenames in os.walk(path):
         for f in filenames:
@@ -193,7 +196,7 @@ def _dir_size(path):
     return total
 
 
-def _fmt_size(nbytes):
+def _fmt_size(nbytes: int | float) -> str:
     for unit in ["B", "KB", "MB", "GB"]:
         if nbytes < 1024:
             return f"{nbytes:.1f} {unit}"
@@ -201,11 +204,11 @@ def _fmt_size(nbytes):
     return f"{nbytes:.1f} TB"
 
 
-def _matches_any(name, patterns):
+def _matches_any(name: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(name, p) for p in patterns)
 
 
-def _resolve_dirs(env_dir, rel_paths):
+def _resolve_dirs(env_dir: str, rel_paths: list[str]) -> list[str]:
     """Expand relative paths (with globs) to existing directories under env_dir.
 
     On conda-forge, the Unix layout puts files under lib/, share/, bin/ etc.
@@ -221,7 +224,7 @@ def _resolve_dirs(env_dir, rel_paths):
     return result
 
 
-def _remove_dirs(env_dir, paths):
+def _remove_dirs(env_dir: str, paths: list[str]) -> int:
     """Remove a list of absolute directory paths, returning bytes saved."""
     saved = 0
     for d in paths:
@@ -237,7 +240,7 @@ def _remove_dirs(env_dir, paths):
     return saved
 
 
-def _remove_files_by_glob(env_dir, patterns):
+def _remove_files_by_glob(env_dir: str, patterns: list[str]) -> tuple[int, int]:
     """Remove files matching glob patterns, returning (count, bytes)."""
     count = 0
     saved = 0
@@ -250,7 +253,7 @@ def _remove_files_by_glob(env_dir, patterns):
     return count, saved
 
 
-def _cleanup_dir_entries(directory, keep_patterns, files_only=False):
+def _cleanup_dir_entries(directory: str, keep_patterns: list[str], files_only: bool = False) -> int:
     """Remove entries from a directory unless their name matches keep_patterns.
 
     Returns bytes saved.  When files_only is True, only regular files and
@@ -275,7 +278,7 @@ def _cleanup_dir_entries(directory, keep_patterns, files_only=False):
     return saved
 
 
-def cleanup_bundled_env(env_dir):
+def cleanup_bundled_env(env_dir: str) -> None:
     """Remove development-only files to reduce installer size."""
     print("Cleaning up bundled environment...")
     saved = 0
@@ -368,14 +371,14 @@ def cleanup_bundled_env(env_dir):
     print(f"  Total cleanup saved: {_fmt_size(saved)}")
 
 
-def install_launcher(src, dst, executable=True):
+def install_launcher(src: str, dst: str, executable: bool = True) -> None:
     """Copy a launcher script into place, marking it executable on POSIX."""
     shutil.copy2(src, dst)
     if executable:
         os.chmod(dst, 0o755)
 
 
-def post_process_darwin(env_dir, tomviz_version):
+def post_process_darwin(env_dir: str, tomviz_version: str) -> str:
     """Create a macOS .app bundle."""
     app_dir = os.path.join(BUILD_DIR, "install", "tomviz.app")
     contents_dir = os.path.join(app_dir, "Contents")
@@ -408,7 +411,7 @@ def post_process_darwin(env_dir, tomviz_version):
     return os.path.join(BUILD_DIR, "install")
 
 
-def post_process_linux(env_dir, tomviz_version):
+def post_process_linux(env_dir: str, tomviz_version: str) -> str:
     """Set up Linux standalone bundle."""
     install_dir = os.path.join(BUILD_DIR, "install", "tomviz")
     os.makedirs(install_dir, exist_ok=True)
@@ -425,7 +428,7 @@ def post_process_linux(env_dir, tomviz_version):
     return os.path.join(BUILD_DIR, "install")
 
 
-def post_process_windows(env_dir, tomviz_version):
+def post_process_windows(env_dir: str, tomviz_version: str) -> str:
     """Set up Windows standalone bundle."""
     install_dir = os.path.join(BUILD_DIR, "install", "tomviz")
     os.makedirs(install_dir, exist_ok=True)
@@ -443,7 +446,7 @@ def post_process_windows(env_dir, tomviz_version):
     return os.path.join(BUILD_DIR, "install")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Package tomviz standalone installers")
     parser.add_argument("--python-version", default="3.13",
                         help="Python version (default: 3.13)")

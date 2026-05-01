@@ -246,7 +246,10 @@ def _remove_files_by_glob(env_dir: str, patterns: list[str]) -> tuple[int, int]:
     saved = 0
     for pattern in patterns:
         for f in glob.glob(os.path.join(env_dir, pattern), recursive=True):
-            if os.path.isfile(f):
+            if os.path.islink(f):
+                os.remove(f)
+                count += 1
+            elif os.path.isfile(f):
                 saved += os.path.getsize(f)
                 os.remove(f)
                 count += 1

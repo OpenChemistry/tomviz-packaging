@@ -337,7 +337,11 @@ class Verifier:
         total = 0
         for root, dirs, files in os.walk(self.install_dir):
             for f in files:
-                total += os.path.getsize(os.path.join(root, f))
+                path = os.path.join(root, f)
+                try:
+                    total += os.path.getsize(path)
+                except OSError:
+                    pass
 
         size_mb = total / (1024 * 1024)
         if size_mb < MIN_SIZE_MB:

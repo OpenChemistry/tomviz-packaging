@@ -12,6 +12,8 @@ Usage:
 """
 
 import argparse
+import fnmatch
+import glob
 import json
 import os
 import platform
@@ -181,6 +183,191 @@ def stage_bundled_env(env_dir, bundle_env_dir):
     fix_qt_conf(bundle_env_dir)
 
 
+def _dir_size(path):
+    total = 0
+    for dirpath, _, filenames in os.walk(path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            if not os.path.islink(fp):
+                total += os.path.getsize(fp)
+    return total
+
+
+def _fmt_size(nbytes):
+    for unit in ["B", "KB", "MB", "GB"]:
+        if nbytes < 1024:
+            return f"{nbytes:.1f} {unit}"
+        nbytes /= 1024
+    return f"{nbytes:.1f} TB"
+
+
+def _matches_any(name, patterns):
+    return any(fnmatch.fnmatch(name, p) for p in patterns)
+
+
+def _resolve_dirs(env_dir, rel_paths):
+    """Expand relative paths (with globs) to existing directories under env_dir.
+
+    On conda-forge, the Unix layout puts files under lib/, share/, bin/ etc.
+    while the Windows layout mirrors them under Library/. Rather than
+    duplicating every path, callers can use a single list and this function
+    probes both layouts automatically.
+    """
+    result = []
+    for rel in rel_paths:
+        for match in glob.glob(os.path.join(env_dir, rel)):
+            if os.path.isdir(match) or os.path.islink(match):
+                result.append(match)
+    return result
+
+
+def _remove_dirs(env_dir, paths):
+    """Remove a list of absolute directory paths, returning bytes saved."""
+    saved = 0
+    for d in paths:
+        rel = os.path.relpath(d, env_dir)
+        if os.path.islink(d):
+            os.remove(d)
+            print(f"  Removed {rel} (symlink)")
+        elif os.path.isdir(d):
+            size = _dir_size(d)
+            shutil.rmtree(d)
+            saved += size
+            print(f"  Removed {rel}/ ({_fmt_size(size)})")
+    return saved
+
+
+def _remove_files_by_glob(env_dir, patterns):
+    """Remove files matching glob patterns, returning (count, bytes)."""
+    count = 0
+    saved = 0
+    for pattern in patterns:
+        for f in glob.glob(os.path.join(env_dir, pattern), recursive=True):
+            if os.path.isfile(f):
+                saved += os.path.getsize(f)
+                os.remove(f)
+                count += 1
+    return count, saved
+
+
+def _cleanup_dir_entries(directory, keep_patterns, files_only=False):
+    """Remove entries from a directory unless their name matches keep_patterns.
+
+    Returns bytes saved.  When files_only is True, only regular files and
+    symlinks are considered (directories are left alone).
+    """
+    if not os.path.isdir(directory):
+        return 0
+    saved = 0
+    for entry in os.listdir(directory):
+        if _matches_any(entry, keep_patterns):
+            continue
+        p = os.path.join(directory, entry)
+        if os.path.isdir(p) and not os.path.islink(p):
+            if files_only:
+                continue
+            saved += _dir_size(p)
+            shutil.rmtree(p)
+        else:
+            if not os.path.islink(p):
+                saved += os.path.getsize(p)
+            os.remove(p)
+    return saved
+
+
+def cleanup_bundled_env(env_dir):
+    """Remove development-only files to reduce installer size."""
+    print("Cleaning up bundled environment...")
+    saved = 0
+
+    # --- Directories ---
+    # Paths may use globs; both Unix (lib/, share/) and Windows (Library/...)
+    # layouts are listed. Non-existent paths are silently skipped.
+    dirs = _resolve_dirs(env_dir, [
+        # Headers
+        "include", "Library/include",
+        # Build system files
+        "lib/cmake", "Library/lib/cmake", "Library/cmake",
+        "lib/pkgconfig", "Library/lib/pkgconfig",
+        # Conda metadata
+        "conda-meta",
+        # Documentation
+        "share/doc", "Library/share/doc", "Library/doc",
+        "share/man", "Library/share/man",
+        "share/info", "Library/share/info",
+        # GObject introspection data (build-time only)
+        "share/gir-1.0", "Library/share/gir-1.0",
+        # Qt dev tools and build files
+        "lib/qt6/bin", "Library/lib/qt6/bin",
+        "lib/qt6/mkspecs", "Library/lib/qt6/mkspecs", "Library/mkspecs",
+        "lib/qt6/metatypes", "Library/lib/qt6/metatypes",
+        "lib/qt6/sbom", "Library/lib/qt6/sbom",
+        "lib/qt6/modules", "Library/lib/qt6/modules",
+        "share/qt6/phrasebooks", "Library/share/qt6/phrasebooks",
+        # Terminal database
+        "lib/terminfo", "share/terminfo", "Library/share/terminfo",
+        # Build artifacts
+        "lib/objects-Release", "Library/lib/objects-Release",
+        # System admin tools / toolchain
+        "sbin",
+        "x86_64-conda*-linux-gnu",
+        # CUPS printing
+        "share/cups", "Library/share/cups",
+        # macOS: bundled ParaView app launcher (not needed)
+        "Applications",
+        # Windows: cmake shims, Fortran modules, Python tools
+        "Library/SPIRV-Tools*", "Library/WebP",
+        "Library/mod", "Tools",
+    ])
+    saved += _remove_dirs(env_dir, dirs)
+
+    # --- Test directories inside site-packages ---
+    for sp in _resolve_dirs(env_dir, [
+            "lib/python*/site-packages", "Lib/site-packages"]):
+        for root, subdirs, _ in os.walk(sp):
+            for d in list(subdirs):
+                if d in ("test", "tests"):
+                    test_path = os.path.join(root, d)
+                    saved += _remove_dirs(env_dir, [test_path])
+                    subdirs.remove(d)
+
+    # --- Static / import libraries (.a, .la, .lib) ---
+    count, lib_saved = _remove_files_by_glob(
+        env_dir, ["**/*.a", "**/*.la", "**/*.lib"])
+    if count:
+        saved += lib_saved
+        print(f"  Removed {count} static/import libraries ({_fmt_size(lib_saved)})")
+
+    # --- Non-essential executables ---
+    # bin/ (Linux/macOS): keep tomviz, python, pip, and config files
+    bin_saved = _cleanup_dir_entries(
+        os.path.join(env_dir, "bin"),
+        keep_patterns=["tomviz", "tomviz.*", "python*", "pip*", "*.conf"])
+    if bin_saved:
+        saved += bin_saved
+        print(f"  Cleaned bin/ ({_fmt_size(bin_saved)})")
+
+    # Library/bin/ (Windows): keep tomviz.exe and all DLLs; remove other .exe
+    lib_bin_saved = _cleanup_dir_entries(
+        os.path.join(env_dir, "Library", "bin"),
+        keep_patterns=["tomviz.exe", "*.dll", "*.conf"],
+        files_only=True)
+    if lib_bin_saved:
+        saved += lib_bin_saved
+        print(f"  Cleaned Library/bin/ ({_fmt_size(lib_bin_saved)})")
+
+    # Scripts/ (Windows): keep pip
+    scripts_saved = _cleanup_dir_entries(
+        os.path.join(env_dir, "Scripts"),
+        keep_patterns=["pip*"],
+        files_only=True)
+    if scripts_saved:
+        saved += scripts_saved
+        print(f"  Cleaned Scripts/ ({_fmt_size(scripts_saved)})")
+
+    print(f"  Total cleanup saved: {_fmt_size(saved)}")
+
+
 def install_launcher(src, dst, executable=True):
     """Copy a launcher script into place, marking it executable on POSIX."""
     shutil.copy2(src, dst)
@@ -198,7 +385,9 @@ def post_process_darwin(env_dir, tomviz_version):
     for d in [macos_dir, resources_dir]:
         os.makedirs(d, exist_ok=True)
 
-    stage_bundled_env(env_dir, os.path.join(contents_dir, "env"))
+    bundle_env_dir = os.path.join(contents_dir, "env")
+    stage_bundled_env(env_dir, bundle_env_dir)
+    cleanup_bundled_env(bundle_env_dir)
 
     install_launcher(
         os.path.join(SCRIPT_DIR, "darwin", "launcher.sh"),
@@ -224,7 +413,9 @@ def post_process_linux(env_dir, tomviz_version):
     install_dir = os.path.join(BUILD_DIR, "install", "tomviz")
     os.makedirs(install_dir, exist_ok=True)
 
-    stage_bundled_env(env_dir, os.path.join(install_dir, "env"))
+    bundle_env_dir = os.path.join(install_dir, "env")
+    stage_bundled_env(env_dir, bundle_env_dir)
+    cleanup_bundled_env(bundle_env_dir)
 
     install_launcher(
         os.path.join(SCRIPT_DIR, "linux", "tomviz.sh"),
@@ -241,13 +432,7 @@ def post_process_windows(env_dir, tomviz_version):
 
     bundle_env_dir = os.path.join(install_dir, "env")
     stage_bundled_env(env_dir, bundle_env_dir)
-
-    # Trim directories that push paths past Windows' 260-char limit during WIX.
-    for dirname in ["include", "mkspecs"]:
-        remove_dir = os.path.join(bundle_env_dir, "Library", dirname)
-        if os.path.exists(remove_dir):
-            shutil.rmtree(remove_dir)
-            print(f"  Removed {os.path.relpath(remove_dir, install_dir)}")
+    cleanup_bundled_env(bundle_env_dir)
 
     install_launcher(
         os.path.join(SCRIPT_DIR, "windows", "tomviz.bat"),

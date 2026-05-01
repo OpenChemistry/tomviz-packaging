@@ -14,6 +14,9 @@ REQUIRED = [
     "tomviz.cli",
     "tomviz._wrapping",
     "tomviz._realtime.ctvlib",
+    "tomopy",
+    "pystackreg",
+    "itk",
 ]
 
 

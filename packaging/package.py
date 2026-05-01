@@ -95,7 +95,15 @@ def create_environment(python_version, tomviz_version):
         "-c", "conda-forge",
         f"python={python_version}",
         f"tomviz={tomviz_version}",
+        "tomopy",
+        "pystackreg",
     ])
+
+    # ITK is only available to install from pip. Install it here.
+    pip = os.path.join(env_dir, "bin", "pip")
+    if platform.system() == "Windows":
+        pip = os.path.join(env_dir, "Scripts", "pip.exe")
+    run([pip, "install", "itk"])
 
     return env_dir
 

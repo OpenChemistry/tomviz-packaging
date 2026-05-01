@@ -9,9 +9,8 @@ ENV_DIR="$SCRIPT_DIR/../env"
 export PATH="$ENV_DIR/bin:$PATH"
 export CONDA_PREFIX="$ENV_DIR"
 
-# Qt/ParaView plugin paths
+# Qt plugin path
 export QT_PLUGIN_PATH="$ENV_DIR/lib/qt6/plugins"
-export PV_PLUGIN_PATH="$ENV_DIR/lib/paraview-6.1/plugins"
 
 # Python paths are handled by the tomviz binary itself
 

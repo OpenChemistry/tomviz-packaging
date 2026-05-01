@@ -9,8 +9,7 @@ export PATH="$ENV_DIR/bin:$PATH"
 export LD_LIBRARY_PATH="$ENV_DIR/lib:${LD_LIBRARY_PATH:-}"
 export CONDA_PREFIX="$ENV_DIR"
 
-# Qt/ParaView plugin paths
+# Qt plugin path
 export QT_PLUGIN_PATH="$ENV_DIR/lib/qt6/plugins"
-export PV_PLUGIN_PATH="$ENV_DIR/lib/paraview-6.1/plugins"
 
 exec "$ENV_DIR/bin/tomviz" "$@"

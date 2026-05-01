@@ -206,6 +206,7 @@ jobs:
         shell: bash
         run: |
           ENV_DIR="packaging/_build/install/tomviz/env"
+          export PATH="$ENV_DIR/Library/bin:$ENV_DIR/Scripts:$ENV_DIR:$PATH"
           echo "=== Testing Python imports ==="
           "$ENV_DIR/python.exe" .github/scripts/verify_imports.py
 

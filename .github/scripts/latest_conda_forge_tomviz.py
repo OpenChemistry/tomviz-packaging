@@ -35,6 +35,11 @@ def main() -> None:
     files = [
         f for f in data.get("files", [])
         if f.get("attrs", {}).get("subdir") == SUBDIR
+        # Only consider main-channel releases. Pre-release builds (e.g. betas)
+        # are uploaded to other anaconda.org labels such as "beta", and the
+        # anaconda API returns files for every label, so we must filter here
+        # to keep packaging from picking up a beta as the "latest" version.
+        and "main" in f.get("labels", [])
     ]
 
     matching = [

@@ -65,6 +65,12 @@ EXPECTED_DIRS_WINDOWS = [
     "env/Lib/site-packages/tomviz",
 ]
 
+# Sample datasets bundled into the installers (see package.py install_sample_data).
+SAMPLE_DATA_FILES = [
+    "Recon_NanoParticle_doi_10.1021-nl103400a.emd",
+    "TiltSeries_NanoParticle_doi_10.1021-nl103400a.emd",
+]
+
 # Minimum and maximum expected sizes in MB
 MIN_SIZE_MB = 300
 MAX_SIZE_MB = 8000
@@ -125,6 +131,36 @@ class Verifier:
                 self.ok(f"Found dir {d}")
             else:
                 self.error(f"Missing directory: {d}")
+
+    def check_sample_data(self) -> None:
+        """Verify the bundled sample datasets were installed.
+
+        These live in share/tomviz/Data relative to the env, with the Windows
+        layout mirroring it under Library/share. tomviz only shows the
+        "Star Nanoparticle" Sample Data menu entries when they are present.
+        """
+        print("\n=== Sample Data Checks ===")
+
+        is_app_bundle = (self.system == "Darwin" and
+                         os.path.exists(os.path.join(self.install_dir, "Contents")))
+
+        if self.system == "Windows":
+            data_dir = os.path.join(
+                self.install_dir, "env", "Library", "share", "tomviz", "Data")
+        elif is_app_bundle:
+            data_dir = os.path.join(
+                self.install_dir, "Contents", "env", "share", "tomviz", "Data")
+        else:
+            data_dir = os.path.join(
+                self.install_dir, "env", "share", "tomviz", "Data")
+
+        for name in SAMPLE_DATA_FILES:
+            path = os.path.join(data_dir, name)
+            if os.path.isfile(path):
+                self.ok(f"Found sample data {name}")
+            else:
+                self.error(
+                    f"Missing sample data: {os.path.relpath(path, self.install_dir)}")
 
     def check_binary_type(self) -> None:
         """Verify the main executable is the correct binary type."""
@@ -357,6 +393,7 @@ class Verifier:
         print(f"Platform: {self.system}")
 
         self.check_structure()
+        self.check_sample_data()
         self.check_binary_type()
         self.check_library_deps()
         self.check_prefix_leaks()

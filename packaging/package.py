@@ -29,6 +29,15 @@ from typing import Any
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BUILD_DIR = os.path.join(SCRIPT_DIR, "_build")
 
+# Sample datasets bundled into the standalone installers. The conda-forge
+# package ships without them; tomviz shows the "Star Nanoparticle" Sample Data
+# menu entries only when these files are present in share/tomviz/Data.
+SAMPLE_DATA_DIR = os.path.join(SCRIPT_DIR, "sample_data")
+SAMPLE_DATA_FILES = [
+    "Recon_NanoParticle_doi_10.1021-nl103400a.emd",
+    "TiltSeries_NanoParticle_doi_10.1021-nl103400a.emd",
+]
+
 
 def run(cmd: list[str], **kwargs: Any) -> None:
     print(f"  >> {' '.join(cmd)}")
@@ -374,6 +383,32 @@ def cleanup_bundled_env(env_dir: str) -> None:
     print(f"  Total cleanup saved: {_fmt_size(saved)}")
 
 
+def install_sample_data(bundle_env_dir: str) -> None:
+    """Copy the bundled sample datasets into the env's share/tomviz/Data.
+
+    tomviz resolves this directory relative to its executable, so the files
+    must live under share/tomviz/Data (Unix) or Library/share/tomviz/Data
+    (Windows) inside the bundled env. The share/tomviz dir already exists
+    (it holds the operator scripts), so we just add a Data subdir to it.
+    """
+    share_candidates = [
+        os.path.join(bundle_env_dir, "share", "tomviz"),
+        os.path.join(bundle_env_dir, "Library", "share", "tomviz"),
+    ]
+    share_tomviz = next(
+        (p for p in share_candidates if os.path.isdir(p)), share_candidates[0])
+    data_dir = os.path.join(share_tomviz, "Data")
+    os.makedirs(data_dir, exist_ok=True)
+
+    print("Installing sample data...")
+    for name in SAMPLE_DATA_FILES:
+        src = os.path.join(SAMPLE_DATA_DIR, name)
+        if not os.path.exists(src):
+            raise RuntimeError(f"Sample data file not found: {src}")
+        shutil.copy2(src, os.path.join(data_dir, name))
+        print(f"  Installed {os.path.relpath(os.path.join(data_dir, name), bundle_env_dir)}")
+
+
 def install_launcher(src: str, dst: str, executable: bool = True) -> None:
     """Copy a launcher script into place, marking it executable on POSIX."""
     shutil.copy2(src, dst)
@@ -394,6 +429,7 @@ def post_process_darwin(env_dir: str, tomviz_version: str) -> str:
     bundle_env_dir = os.path.join(contents_dir, "env")
     stage_bundled_env(env_dir, bundle_env_dir)
     cleanup_bundled_env(bundle_env_dir)
+    install_sample_data(bundle_env_dir)
 
     install_launcher(
         os.path.join(SCRIPT_DIR, "darwin", "launcher.sh"),
@@ -422,6 +458,7 @@ def post_process_linux(env_dir: str, tomviz_version: str) -> str:
     bundle_env_dir = os.path.join(install_dir, "env")
     stage_bundled_env(env_dir, bundle_env_dir)
     cleanup_bundled_env(bundle_env_dir)
+    install_sample_data(bundle_env_dir)
 
     install_launcher(
         os.path.join(SCRIPT_DIR, "linux", "tomviz.sh"),
@@ -439,6 +476,7 @@ def post_process_windows(env_dir: str, tomviz_version: str) -> str:
     bundle_env_dir = os.path.join(install_dir, "env")
     stage_bundled_env(env_dir, bundle_env_dir)
     cleanup_bundled_env(bundle_env_dir)
+    install_sample_data(bundle_env_dir)
 
     install_launcher(
         os.path.join(SCRIPT_DIR, "windows", "tomviz.bat"),

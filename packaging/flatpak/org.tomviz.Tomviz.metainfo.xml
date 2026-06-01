@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+    <id>org.tomviz.Tomviz</id>
+    <launchable type="desktop-id">org.tomviz.Tomviz.desktop</launchable>
+    <name>Tomviz</name>
+    <summary>Free and open source tomographic visualization of nanoscale materials</summary>
+    <metadata_license>CC0-1.0</metadata_license>
+    <project_license>BSD-3-Clause</project_license>
+    <description>
+        <p>
+            Tomviz is an open source software platform for reproducible volumetric visualization
+            and data processing. The platform is designed for a wide range scientific applications
+            but is especially tailored to high-resolution electron tomography, with features that
+            allow alignment and reconstruction of nanoscale materials. The tomviz platform allows
+            graphical analysis of 3D datasets, but also comes packaged with Python, NumPy, and
+            SciPy tools to allow advanced data processing and analysis.
+        </p>
+    </description>
+    <developer id="org.tomviz">
+        <name>Tomviz</name>
+    </developer>
+    <url type="homepage">https://tomviz.org</url>
+    <url type="help">https://tomviz.org/docs/</url>
+    <url type="bugtracker">https://github.com/openchemistry/tomviz/issues</url>
+    <url type="vcs-browser">https://github.com/openchemistry/tomviz/</url>
+    <screenshots>
+        <screenshot type="default">
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/1504x846/org.tomviz.Tomviz-8d2ee9df0850fc6df9a8e3d0a9579330.webp</image>
+        </screenshot>
+        <screenshot>
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/1504x846/org.tomviz.Tomviz-ed395dd3b428069f23e712b94602816f.webp</image>
+        </screenshot>
+        <screenshot>
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/1504x846/org.tomviz.Tomviz-688d043d30488e00ed8001f14b5433d7.webp</image>
+        </screenshot>
+        <screenshot>
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/1248x702/org.tomviz.Tomviz-d4d1f1ec70edf463edfbf385aa1b374c.webp</image>
+        </screenshot>
+        <screenshot>
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/752x423/org.tomviz.Tomviz-91fbb5c750a81a9e8eb17d51581a329c.webp</image>
+        </screenshot>
+        <screenshot>
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/1248x702/org.tomviz.Tomviz-773fd5d2daec2cf9e9b23a6743d78077.webp</image>
+        </screenshot>
+        <screenshot>
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/1504x846/org.tomviz.Tomviz-738c59bd54d4f14b3c0d79c4e1f27f1a.webp</image>
+        </screenshot>
+        <screenshot>
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/1504x846/org.tomviz.Tomviz-963495233862e855a7339b6d550ef275.webp</image>
+        </screenshot>
+        <screenshot>
+            <image>https://dl.flathub.org/repo/screenshots/org.tomviz.Tomviz-stable/1504x846/org.tomviz.Tomviz-773382a332c5d33783d89dfdd1b554cd.webp</image>
+        </screenshot>
+    </screenshots>
+    <content_rating type="oars-1.1"/>
+    <releases>
+        <release version="1.10.0" date="2021-05-25">
+            <description>
+                <p>New features:</p>
+                <ul>
+                    <li>RGB visualization of 3-component volumes</li>
+                    <li>support for multiple overlapping volumes</li>
+                    <li>move and resize volumes interactively</li>
+                    <li>ImageJ-like brightness and contrast editor</li>
+                    <li>Image viewer mode</li>
+                    <li>Holographic rendering on Looking Glass devices</li>
+                </ul>
+            </description>
+        </release>
+   </releases>
+</component>

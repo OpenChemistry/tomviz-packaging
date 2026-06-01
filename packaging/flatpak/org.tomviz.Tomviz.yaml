@@ -1,0 +1,69 @@
+# Flatpak manifest for Tomviz.
+#
+# Unlike the old (EOL) Flathub manifest, this does NOT build Tomviz or ParaView
+# from source. It packages the *same* prebuilt, relocatable conda-forge bundle
+# that package.py stages for the tarball and the RPM, copied into /app. This
+# gives us the SOW-required versions (ParaView >=5.12, Qt6, Python 3.13) for
+# free and keeps all three Linux artifacts in lockstep.
+#
+# The bundle is laid out at /app/tomviz (env + launcher), mirroring the tarball
+# and the /opt RPM, and exposed as /app/bin/tomviz so `flatpak run` finds it.
+# The launcher (linux/tomviz.sh) sets CONDA_PREFIX / QT_PLUGIN_PATH / library
+# paths exactly as in the other artifacts, so behaviour is identical.
+#
+# build_flatpak.sh stages the bundle into ./payload/tomviz before building.
+app-id: org.tomviz.Tomviz
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: tomviz
+
+# The payload is a prebuilt conda environment: do not let flatpak-builder strip
+# binaries, mangle them, or split out debuginfo -- ship them exactly as built.
+build-options:
+  strip: false
+  no-debuginfo: true
+
+finish-args:
+  # Windowing: prefer Wayland, fall back to X11 (the bundled Qt6 supports both).
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # GPU-accelerated OpenGL for ParaView/VTK rendering.
+  - --device=dri
+  # Tiled/DataBroker access and any other beamline network services.
+  - --share=network
+  # Dataset access. --filesystem=home covers user data; the NSLS-II beamline
+  # mounts can be added/narrowed here (e.g. --filesystem=/nsls2:ro) once the
+  # DSSI tech rep confirms the mount points.
+  - --filesystem=home
+  # GLEW/older GL paths sometimes need this; harmless otherwise.
+  - --env=QT_X11_NO_MITSHM=1
+
+modules:
+  - name: tomviz
+    buildsystem: simple
+    build-commands:
+      # Copy the staged bundle (env + launcher) into /app/tomviz.
+      - mkdir -p /app/tomviz /app/bin
+      - cp -a tomviz/. /app/tomviz/
+      # Expose the launcher on PATH so `command: tomviz` resolves it. The
+      # launcher uses readlink -f, so it correctly finds /app/tomviz/env.
+      - ln -sf ../tomviz/tomviz /app/bin/tomviz
+      # Desktop integration inside the sandbox.
+      - install -Dm0644 org.tomviz.Tomviz.desktop
+        /app/share/applications/org.tomviz.Tomviz.desktop
+      - install -Dm0644 org.tomviz.Tomviz.metainfo.xml
+        /app/share/metainfo/org.tomviz.Tomviz.metainfo.xml
+      - install -Dm0644 org.tomviz.Tomviz.png
+        /app/share/icons/hicolor/128x128/apps/org.tomviz.Tomviz.png
+    sources:
+      # ./payload/tomviz is created by build_flatpak.sh from package.py output.
+      - type: dir
+        path: payload
+      - type: file
+        path: org.tomviz.Tomviz.desktop
+      - type: file
+        path: org.tomviz.Tomviz.metainfo.xml
+      - type: file
+        path: org.tomviz.Tomviz.png

@@ -1,0 +1,83 @@
+name: Test Flatpak (no release)
+
+# Iteration harness for the Tomviz flatpak. Builds the flatpak from the
+# conda-forge bundle and runs a headless software-GL smoke test on GitHub's
+# runners (which, unlike a local Docker-on-macOS VM, support the user
+# namespaces bubblewrap needs).
+#
+# Deliberately does NOT create a release. Trigger it by pushing the flatpak work
+# to any branch other than main/master, or run it manually via the Actions tab
+# (workflow_dispatch). The release-building flow lives in package.yml and only
+# runs on main/master.
+
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - main
+      - master
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/flatpak-test.yml'
+
+env:
+  PYTHON_VERSION: '3.13'
+
+jobs:
+  build-flatpak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          environment-file: packaging/environment.yml
+          conda-remove-defaults: 'true'
+
+      - name: Determine tomviz version
+        id: ver
+        shell: bash -el {0}
+        env:
+          PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          LATEST=$(python3 .github/scripts/latest_conda_forge_tomviz.py "$PYTHON_VERSION")
+          VERSION=$(echo "$LATEST" | awk '{print $1}')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tomviz version: $VERSION"
+
+      - name: Build bundle
+        shell: bash -el {0}
+        env:
+          TOMVIZ_VERSION: ${{ steps.ver.outputs.version }}
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
+
+      - name: Install flatpak tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq flatpak flatpak-builder xvfb \
+            mesa-utils libgl1-mesa-dri
+          flatpak remote-add --user --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Build flatpak
+        env:
+          TOMVIZ_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          cd packaging
+          bash flatpak/build_flatpak.sh --staged _build/install --version "$TOMVIZ_VERSION" --out _build
+
+      - name: Smoke test flatpak (xvfb + software GL)
+        env:
+          TOMVIZ_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          cd packaging
+          bash flatpak/test_flatpak.sh "_build/org.tomviz.Tomviz-${TOMVIZ_VERSION}.flatpak"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tomviz-flatpak-test
+          path: packaging/_build/org.tomviz.Tomviz-*.flatpak

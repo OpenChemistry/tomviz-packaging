@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tomviz
+GenericName=Tomographic visualization
+Comment=Tomographic visualization for nanoscale materials
+Exec=tomviz %U
+Icon=org.tomviz.Tomviz
+Terminal=false
+Categories=Science;Education;Qt;
+Keywords=tomography;visualization;volume;reconstruction;microscopy;
+StartupNotify=true

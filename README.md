@@ -11,10 +11,12 @@ This repository builds standalone installers for [Tomviz](https://github.com/Ope
 | Windows | `.msi`, `.zip` | MSI is unsigned — sign internally before distribution |
 | Linux | `.tar.gz` | Relocatable bundle, extract anywhere |
 | Linux (RHEL8/9) | `.rpm` | Installs to `/opt/tomviz`; relocatable via `--prefix` |
+| Linux | `.flatpak` | Single-file bundle, `org.freedesktop.Platform` runtime |
 
-The Linux formats wrap the **same** relocatable conda-forge bundle (`package.py`
-+ `conda-pack`): the `.tar.gz` is the raw bundle and the `.rpm` drops it into
-`/opt/tomviz` with desktop integration.
+All Linux formats wrap the **same** relocatable conda-forge bundle (`package.py`
++ `conda-pack`), so they stay in lockstep: the `.tar.gz` is the raw bundle, the
+`.rpm` drops it into `/opt/tomviz` with desktop integration, and the `.flatpak`
+copies it into the sandbox's `/app`.
 
 ## How It Works
 
@@ -32,9 +34,9 @@ python package.py --tomviz-version 2.3.1
 cpack --config CPackConfig.cmake          # .tar.gz / .dmg / .msi
 ```
 
-### Linux RPM
+### Linux RPM and Flatpak
 
-Consumes the bundle staged by `package.py` (`_build/install/tomviz`):
+Both consume the bundle staged by `package.py` (`_build/install/tomviz`):
 
 ```bash
 cd packaging
@@ -42,20 +44,24 @@ python package.py --tomviz-version 2.3.1 --python-version 3.13
 
 # RPM (relocatable, installs to /opt/tomviz)
 bash linux/build_rpm.sh --staged _build/install --version 2.3.1 --out _build
+
+# Flatpak (single-file bundle)
+bash flatpak/build_flatpak.sh --staged _build/install --version 2.3.1 --out _build
 ```
 
-The committed `linux/tomviz.spec` is the configuration file required to rebuild
-the package (per the NSLS-II SOW).
+The committed `linux/tomviz.spec` and `flatpak/org.tomviz.Tomviz.yaml` are the
+configuration files required to rebuild each package (per the NSLS-II SOW).
 
-**Build + test locally via Docker** (handles the RHEL containers; uses
-`linux/amd64` emulation on Apple Silicon):
+**Build + test locally via Docker** (handles RHEL containers / flatpak sandbox;
+uses `linux/amd64` emulation on Apple Silicon):
 
 ```bash
-bash packaging/linux/build_and_test_rpm_local.sh 2.3.1 3.13   # RPM on Rocky 8 + 9
+bash packaging/linux/build_and_test_rpm_local.sh 2.3.1 3.13       # RPM on Rocky 8 + 9
+bash packaging/flatpak/build_and_test_flatpak_local.sh 2.3.1 3.13 # Flatpak smoke test
 ```
 
-Mirrors the CI tests: structural verification, install, headless smoke test
-under software GL, and a relocation test at a non-default prefix.
+Both mirror the CI tests: structural verification, install, headless smoke test
+under software GL, and (for the RPM) a relocation test at a non-default prefix.
 
 ## Publishing to OpenChemistry/tomviz
 

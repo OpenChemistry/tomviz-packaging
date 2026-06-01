@@ -430,8 +430,65 @@ jobs:
           name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}.rpm
           path: packaging/Tomviz-*.rpm
 
+  build-flatpak:
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          environment-file: packaging/environment.yml
+          conda-remove-defaults: 'true'
+
+      - name: Build bundle
+        shell: bash -el {0}
+        env:
+          TOMVIZ_VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+          TOMVIZ_PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+        run: |
+          cd packaging
+          python package.py --tomviz-version "$TOMVIZ_VERSION" --python-version "$TOMVIZ_PYTHON_VERSION"
+
+      - name: Install flatpak tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq flatpak flatpak-builder xvfb \
+            mesa-utils libgl1-mesa-dri
+          flatpak remote-add --user --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Build flatpak
+        env:
+          TOMVIZ_VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+        run: |
+          cd packaging
+          bash flatpak/build_flatpak.sh --staged _build/install --version "$TOMVIZ_VERSION" --out _build
+
+      - name: Smoke test flatpak (xvfb + software GL)
+        env:
+          TOMVIZ_VERSION: ${{ needs.check-version.outputs.tomviz_version }}
+        run: |
+          cd packaging
+          bash flatpak/test_flatpak.sh "_build/org.tomviz.Tomviz-${TOMVIZ_VERSION}.flatpak"
+
+      - name: Check artifact size
+        run: bash .github/scripts/check_artifact_size.sh "packaging/_build/org.tomviz.Tomviz-*.flatpak" 200
+
+      - name: Rename artifact
+        run: |
+          mv packaging/_build/org.tomviz.Tomviz-*.flatpak \
+            "packaging/Tomviz-${{ needs.check-version.outputs.tomviz_version }}.flatpak"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tomviz-${{ needs.check-version.outputs.tomviz_version }}.flatpak
+          path: packaging/Tomviz-*.flatpak
+
   create-release:
-    needs: [check-version, build-macos, build-windows, build-linux, build-linux-rpm]
+    needs: [check-version, build-macos, build-windows, build-linux, build-linux-rpm, build-flatpak]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -444,7 +501,7 @@ jobs:
         run: |
           mkdir -p release
           # Files are already named correctly from each build job
-          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.msi" -o -name "*.tar.gz" -o -name "*.rpm" \) -exec cp {} release/ \;
+          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.msi" -o -name "*.tar.gz" -o -name "*.rpm" -o -name "*.flatpak" \) -exec cp {} release/ \;
           ls -la release/
 
       - name: Create release on this repo

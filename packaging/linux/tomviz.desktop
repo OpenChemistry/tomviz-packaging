@@ -1,0 +1,16 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tomviz
+GenericName=Tomographic visualization
+Comment=Tomographic visualization for nanoscale materials
+# Exec/Icon are intentionally name-based (not absolute paths) so this entry
+# stays valid no matter where the RPM is installed/relocated. The package's
+# %post creates the /usr/bin/tomviz launcher symlink and installs the themed
+# icon, which is what these resolve against.
+Exec=tomviz %U
+Icon=tomviz
+Terminal=false
+Categories=Science;Education;Qt;
+Keywords=tomography;visualization;volume;reconstruction;microscopy;
+StartupNotify=true

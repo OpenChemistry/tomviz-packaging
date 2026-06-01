@@ -1,7 +1,11 @@
 #!/bin/bash
 # Launcher script for the Tomviz Linux standalone bundle.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Resolve symlinks so the bundle is found correctly even when this launcher is
+# invoked through a symlink (e.g. the /usr/bin/tomviz symlink the RPM creates,
+# or the .desktop entry's "Exec=tomviz"). readlink -f is available on all
+# supported Linux targets (RHEL/Fedora/Debian).
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 ENV_DIR="$SCRIPT_DIR/env"
 
 # Activate the conda environment paths

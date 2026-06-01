@@ -5,4 +5,5 @@ _CPack_Packages/
 *.zip
 *.tar.gz
 *.tar.bz2
+*.rpm
 env/

@@ -9,7 +9,12 @@ This repository builds standalone installers for [Tomviz](https://github.com/Ope
 | macOS x64 | `.dmg` | Unsigned — sign/notarize internally before distribution |
 | macOS ARM | `.dmg` | Unsigned — sign/notarize internally before distribution |
 | Windows | `.msi`, `.zip` | MSI is unsigned — sign internally before distribution |
-| Linux | `.tar.gz` | |
+| Linux | `.tar.gz` | Relocatable bundle, extract anywhere |
+| Linux (RHEL8/9) | `.rpm` | Installs to `/opt/tomviz`; relocatable via `--prefix` |
+
+The Linux formats wrap the **same** relocatable conda-forge bundle (`package.py`
++ `conda-pack`): the `.tar.gz` is the raw bundle and the `.rpm` drops it into
+`/opt/tomviz` with desktop integration.
 
 ## How It Works
 
@@ -24,8 +29,33 @@ cd packaging
 conda env create -f environment.yml
 conda activate tomviz-package
 python package.py --tomviz-version 2.3.1
-cpack --config CPackConfig.cmake
+cpack --config CPackConfig.cmake          # .tar.gz / .dmg / .msi
 ```
+
+### Linux RPM
+
+Consumes the bundle staged by `package.py` (`_build/install/tomviz`):
+
+```bash
+cd packaging
+python package.py --tomviz-version 2.3.1 --python-version 3.13
+
+# RPM (relocatable, installs to /opt/tomviz)
+bash linux/build_rpm.sh --staged _build/install --version 2.3.1 --out _build
+```
+
+The committed `linux/tomviz.spec` is the configuration file required to rebuild
+the package (per the NSLS-II SOW).
+
+**Build + test locally via Docker** (handles the RHEL containers; uses
+`linux/amd64` emulation on Apple Silicon):
+
+```bash
+bash packaging/linux/build_and_test_rpm_local.sh 2.3.1 3.13   # RPM on Rocky 8 + 9
+```
+
+Mirrors the CI tests: structural verification, install, headless smoke test
+under software GL, and a relocation test at a non-default prefix.
 
 ## Publishing to OpenChemistry/tomviz
 

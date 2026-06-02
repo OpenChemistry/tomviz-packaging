@@ -16,4 +16,10 @@ export CONDA_PREFIX="$ENV_DIR"
 # Qt plugin path
 export QT_PLUGIN_PATH="$ENV_DIR/lib/qt6/plugins"
 
+# fontconfig in the conda build bakes its build-time prefix as the default
+# config path, which doesn't exist at runtime. FONTCONFIG_FILE overrides the
+# default with the bundle's fonts.conf (FONTCONFIG_PATH only adds a search
+# directory and does not suppress the "Cannot load default config" error).
+export FONTCONFIG_FILE="$ENV_DIR/etc/fonts/fonts.conf"
+
 exec "$ENV_DIR/bin/tomviz" "$@"

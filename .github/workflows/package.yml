@@ -510,15 +510,48 @@ jobs:
           VERSION: ${{ needs.check-version.outputs.tomviz_version }}
           BUILD_STRING: ${{ needs.check-version.outputs.build_string }}
         run: |
-          # Delete existing release if present (the tag is reused, which is fine for our flow).
-          gh release delete "v${VERSION}" --repo "${{ github.repository }}" -y 2>/dev/null || true
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          TAG="v${VERSION}"
 
-          gh release create "v${VERSION}" release/* \
-            --repo "${{ github.repository }}" \
-            --title "Tomviz ${VERSION}" \
-            --notes "Standalone installers for Tomviz ${VERSION}.
+          NOTES="Standalone installers for Tomviz ${VERSION}.
 
           **macOS DMGs and Windows MSI are unsigned.** Download and sign/notarize internally before distribution.
 
           Built from conda-forge packages with Python ${{ env.PYTHON_VERSION }}.
           conda-forge build: ${BUILD_STRING}"
+
+          # Remove any existing release for this tag (published or draft) so we start
+          # clean. Reusing the tag is intentional. Only tolerate "release not found";
+          # any other error (e.g. a 401) must fail the job instead of being masked,
+          # otherwise a stale draft silently lingers and is never published.
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release delete "$TAG" --repo "$REPO" --cleanup-tag -y
+          fi
+
+          # Create the release as a draft with no assets first. This is a small, fast
+          # call, separate from the multi-GB upload that intermittently 401s.
+          gh release create "$TAG" \
+            --repo "$REPO" \
+            --title "Tomviz ${VERSION}" \
+            --notes "$NOTES" \
+            --draft
+
+          # Upload the large assets separately, retrying on the transient HTTP 401 /
+          # network failures that have aborted the upload mid-flight. --clobber lets a
+          # retry overwrite assets that a previous attempt partially uploaded.
+          for attempt in 1 2 3; do
+            if gh release upload "$TAG" release/* --repo "$REPO" --clobber; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Asset upload failed after $attempt attempts" >&2
+              exit 1
+            fi
+            echo "Asset upload attempt $attempt failed; retrying in 30s..." >&2
+            sleep 30
+          done
+
+          # Publish only after every asset is in place, so a failed upload never
+          # leaves a half-populated published release.
+          gh release edit "$TAG" --repo "$REPO" --draft=false

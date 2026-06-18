@@ -39,6 +39,11 @@ finish-args:
   - --filesystem=home
   # GLEW/older GL paths sometimes need this; harmless otherwise.
   - --env=QT_X11_NO_MITSHM=1
+  # Under the freedesktop runtime there is no host platform theme, so the
+  # bundled Qt6 falls back to its compiled-in "Windows" style (a dated, 90s
+  # look). Force the built-in Fusion style for a modern, consistent appearance.
+  # This is Flatpak-only; the RPM and tarball pick up the host theme fine.
+  - --env=QT_STYLE_OVERRIDE=Fusion
 
 modules:
   - name: tomviz

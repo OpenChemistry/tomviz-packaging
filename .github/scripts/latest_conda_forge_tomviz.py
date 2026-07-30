@@ -42,13 +42,27 @@ def main() -> None:
         and "main" in f.get("labels", [])
     ]
 
+    if not files:
+        sys.exit(f"No tomviz packages found for {SUBDIR} on conda-forge")
+
+    # Fail loudly rather than falling back to every build: silently picking
+    # a package built for another Python produces an environment that either
+    # fails to solve or, worse, packages the wrong interpreter's extensions.
     matching = [
         f for f in files
         if f.get("attrs", {}).get("build", "").startswith(py_prefix)
-    ] or files
-
+    ]
     if not matching:
-        sys.exit(f"No tomviz packages found for {SUBDIR} on conda-forge")
+        available = sorted({
+            f.get("attrs", {}).get("build", "").split("h")[0]
+            for f in files
+        })
+        sys.exit(
+            f"No tomviz build for Python {python_version} ({py_prefix}) on "
+            f"conda-forge {SUBDIR}. Available: {', '.join(available)}. "
+            "Wait for the feedstock to publish that Python version before "
+            "bumping PYTHON_VERSION."
+        )
 
     def ver_key(f: dict[str, Any]) -> tuple[tuple[int, ...], int]:
         parts = tuple(int(x) for x in f["version"].split(".") if x.isdigit())

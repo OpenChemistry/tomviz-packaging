@@ -69,16 +69,24 @@ def query_latest_version(python_version: str) -> tuple[str, str]:
     data: dict[str, Any] = json.loads(result.stdout)
     packages: list[dict[str, Any]] = data.get("tomviz", [])
 
-    # Filter to the requested python version
+    if not packages:
+        raise RuntimeError("No tomviz packages found on conda-forge")
+
+    # Filter to the requested python version. Do not fall back to every
+    # build: silently picking a package built for another Python produces an
+    # environment that either fails to solve or packages the wrong
+    # interpreter's extension modules.
     py_prefix = f"py{python_version.replace('.', '')}"
     matching = [p for p in packages if p["build"].startswith(py_prefix)]
 
     if not matching:
-        # Try without python filter
-        matching = packages
-
-    if not matching:
-        raise RuntimeError("No tomviz packages found on conda-forge")
+        available = sorted({p["build"].split("h")[0] for p in packages})
+        raise RuntimeError(
+            f"No tomviz build for Python {python_version} ({py_prefix}) on "
+            f"conda-forge. Available: {', '.join(available)}. Wait for the "
+            "feedstock to publish that Python version before bumping "
+            "--python-version."
+        )
 
     # Sort by version (as int tuples) and build number to get the latest
     def version_key(p: dict[str, Any]) -> tuple[tuple[int, ...], int]:

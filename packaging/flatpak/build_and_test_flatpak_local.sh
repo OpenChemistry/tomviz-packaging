@@ -12,7 +12,7 @@
 # Usage: build_and_test_flatpak_local.sh [version] [python_version]
 set -euo pipefail
 
-VERSION="${1:-2.3.1}"
+VERSION="${1:-3.0.0}"
 PYVER="${2:-3.13}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 

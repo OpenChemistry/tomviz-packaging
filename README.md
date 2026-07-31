@@ -30,7 +30,7 @@ copies it into the sandbox's `/app`.
 cd packaging
 conda env create -f environment.yml
 conda activate tomviz-package
-python package.py --tomviz-version 2.3.1
+python package.py --tomviz-version 3.0.0
 cpack --config CPackConfig.cmake          # .tar.gz / .dmg / .msi
 ```
 
@@ -40,13 +40,13 @@ Both consume the bundle staged by `package.py` (`_build/install/tomviz`):
 
 ```bash
 cd packaging
-python package.py --tomviz-version 2.3.1 --python-version 3.13
+python package.py --tomviz-version 3.0.0 --python-version 3.13
 
 # RPM (relocatable, installs to /opt/tomviz)
-bash linux/build_rpm.sh --staged _build/install --version 2.3.1 --out _build
+bash linux/build_rpm.sh --staged _build/install --version 3.0.0 --out _build
 
 # Flatpak (single-file bundle)
-bash flatpak/build_flatpak.sh --staged _build/install --version 2.3.1 --out _build
+bash flatpak/build_flatpak.sh --staged _build/install --version 3.0.0 --out _build
 ```
 
 The committed `linux/tomviz.spec` and `flatpak/org.tomviz.Tomviz.yaml` are the
@@ -56,8 +56,8 @@ configuration files required to rebuild each package (per the NSLS-II SOW).
 uses `linux/amd64` emulation on Apple Silicon):
 
 ```bash
-bash packaging/linux/build_and_test_rpm_local.sh 2.3.1 3.13       # RPM on Rocky 8 + 9
-bash packaging/flatpak/build_and_test_flatpak_local.sh 2.3.1 3.13 # Flatpak smoke test
+bash packaging/linux/build_and_test_rpm_local.sh 3.0.0 3.13       # RPM on Rocky 8 + 9
+bash packaging/flatpak/build_and_test_flatpak_local.sh 3.0.0 3.13 # Flatpak smoke test
 ```
 
 Both mirror the CI tests: structural verification, install, headless smoke test

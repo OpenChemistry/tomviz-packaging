@@ -54,6 +54,17 @@
     </screenshots>
     <content_rating type="oars-1.1"/>
     <releases>
+        <release version="3.0.0" date="2026-07-30">
+            <description>
+                <p>New features:</p>
+                <ul>
+                    <li>Redesigned node-based pipeline</li>
+                    <li>Reproducible workflows with branching analysis paths</li>
+                    <li>External operators that run in isolated conda environments, so an operator can bring any dependencies it needs</li>
+                    <li>Editable node definitions: a node's JSON description and script can be changed in place and saved out as a custom operator</li>
+                </ul>
+            </description>
+        </release>
         <release version="1.10.0" date="2021-05-25">
             <description>
                 <p>New features:</p>

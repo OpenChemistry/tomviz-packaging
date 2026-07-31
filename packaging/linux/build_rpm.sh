@@ -5,7 +5,7 @@
 # <staged>/tomviz/{tomviz,env} exists (the relocatable Linux bundle).
 #
 # Usage:
-#   build_rpm.sh --staged _build/install --version 2.3.1 [--release 1] [--out _build]
+#   build_rpm.sh --staged _build/install --version 3.0.0 [--release 1] [--out _build]
 #
 # Produces: <out>/tomviz-<version>-<release>.<arch>.rpm
 #

@@ -119,6 +119,14 @@ def create_environment(python_version: str, tomviz_version: str) -> str:
         f"tomviz={tomviz_version}",
         "tomopy",
         "pystackreg",
+        # tomviz's movie export encodes MP4 by running the ffmpeg
+        # executable it finds next to its own binary. The gpl variant is
+        # required: only it links libx264 (the lgpl variant's openh264
+        # encoder does not support the CRF quality control tomviz uses).
+        # ffmpeg stays a separate process, so its GPL license does not
+        # extend to tomviz; its license files are bundled by
+        # install_ffmpeg_licenses().
+        "ffmpeg=*=gpl_*",
     ])
 
     # ITK is only available to install from pip. Install it here.
@@ -188,6 +196,65 @@ def cleanup_conda_pack_files(env_dir: str) -> None:
                 print(f"  Removed {os.path.relpath(path, env_dir)}")
 
 
+def install_ffmpeg_licenses(env_dir: str) -> None:
+    """Bundle ffmpeg's license files and a source-availability notice.
+
+    The bundled ffmpeg executable is GPL (the gpl variant links libx264),
+    so redistributing it requires shipping the license text and saying
+    where the corresponding source lives. conda does not materialize a
+    package's info/licenses into the environment; they stay in the pkgs
+    cache, whose location conda-meta records. This must run before
+    cleanup_bundled_env(), which deletes conda-meta.
+    """
+    metas = glob.glob(os.path.join(env_dir, "conda-meta", "ffmpeg-*.json"))
+    if not metas:
+        raise RuntimeError(
+            "ffmpeg is not in the bundled environment; movie export "
+            "requires it (see create_environment)")
+    with open(metas[0]) as f:
+        meta = json.load(f)
+
+    build = meta.get("build", "")
+    if not build.startswith("gpl_"):
+        raise RuntimeError(
+            f"Expected the gpl ffmpeg variant, got build '{build}'. The "
+            "lgpl variant lacks libx264, which tomviz's MP4 export uses.")
+
+    src = os.path.join(meta.get("extracted_package_dir", ""),
+                       "info", "licenses")
+    if not os.path.isdir(src):
+        raise RuntimeError(
+            f"ffmpeg license files not found at {src}; the conda package "
+            "cache may have been cleaned before packaging finished")
+
+    # Unix keeps licenses in share/, the Windows conda layout in Library/.
+    share = os.path.join(env_dir, "share")
+    if not os.path.isdir(share) and os.path.isdir(
+            os.path.join(env_dir, "Library")):
+        share = os.path.join(env_dir, "Library", "share")
+    dest = os.path.join(share, "licenses", "ffmpeg")
+    if os.path.exists(dest):
+        shutil.rmtree(dest)
+    shutil.copytree(src, dest)
+
+    version = meta.get("version", "unknown")
+    with open(os.path.join(dest, "NOTICE.txt"), "w") as f:
+        f.write(
+            f"This tomviz bundle includes ffmpeg {version} ({build}), "
+            "licensed under the GNU General Public License (see the "
+            "COPYING files in this directory). tomviz invokes ffmpeg as "
+            "a separate executable to encode exported movies; tomviz "
+            "itself remains 3-clause BSD.\n"
+            "\n"
+            "Complete corresponding source code for this ffmpeg build is "
+            "available from:\n"
+            "  https://ffmpeg.org/download.html (upstream sources)\n"
+            "  https://github.com/conda-forge/ffmpeg-feedstock (build "
+            "recipe and patches for this exact binary)\n")
+    print(f"  Installed ffmpeg {version} license files -> "
+          f"{os.path.relpath(dest, env_dir)}")
+
+
 def stage_bundled_env(env_dir: str, bundle_env_dir: str) -> None:
     """Move the unpacked conda env into its final bundle location and post-process it.
 
@@ -201,6 +268,8 @@ def stage_bundled_env(env_dir: str, bundle_env_dir: str) -> None:
     cleanup_conda_pack_files(bundle_env_dir)
     # conda-pack leaves hardcoded build-machine paths in qt.conf; rewrite them.
     fix_qt_conf(bundle_env_dir)
+    # Needs conda-meta, which cleanup_bundled_env() removes later.
+    install_ffmpeg_licenses(bundle_env_dir)
 
 
 def _dir_size(path: str) -> int:
@@ -362,18 +431,22 @@ def cleanup_bundled_env(env_dir: str) -> None:
         print(f"  Removed {count} static/import libraries ({_fmt_size(lib_saved)})")
 
     # --- Non-essential executables ---
-    # bin/ (Linux/macOS): keep tomviz, python, pip, and config files
+    # bin/ (Linux/macOS): keep tomviz, python, pip, config files, and
+    # ffmpeg (tomviz's movie export runs the ffmpeg found next to its
+    # own binary)
     bin_saved = _cleanup_dir_entries(
         os.path.join(env_dir, "bin"),
-        keep_patterns=["tomviz", "tomviz.*", "python*", "pip*", "*.conf"])
+        keep_patterns=["tomviz", "tomviz.*", "python*", "pip*", "*.conf",
+                       "ffmpeg"])
     if bin_saved:
         saved += bin_saved
         print(f"  Cleaned bin/ ({_fmt_size(bin_saved)})")
 
-    # Library/bin/ (Windows): keep tomviz.exe and all DLLs; remove other .exe
+    # Library/bin/ (Windows): keep tomviz.exe, ffmpeg.exe and all DLLs;
+    # remove other .exe
     lib_bin_saved = _cleanup_dir_entries(
         os.path.join(env_dir, "Library", "bin"),
-        keep_patterns=["tomviz.exe", "*.dll", "*.conf"],
+        keep_patterns=["tomviz.exe", "ffmpeg.exe", "*.dll", "*.conf"],
         files_only=True)
     if lib_bin_saved:
         saved += lib_bin_saved

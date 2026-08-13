@@ -24,6 +24,18 @@ copies it into the sandbox's `/app`.
 2. **Build**: When a new version is detected, it creates a conda environment with tomviz, uses `conda-pack` to make it relocatable, and wraps it in platform-specific bundles
 3. **Release**: Uploads installers as GitHub Releases
 
+## Bundled ffmpeg
+
+Every bundle includes the conda-forge **gpl** variant of ffmpeg, which tomviz's
+movie export runs (as a separate process) to encode H.264 MP4s; only the gpl
+variant links libx264, which the export's quality control requires. Because the
+ffmpeg executable is GPL, `package.py` copies its license texts and a
+source-availability notice into `share/licenses/ffmpeg/` inside the bundle
+(tomviz itself remains 3-clause BSD; running a GPL executable as a subprocess
+does not change that). `verify.py` checks the binary is present, is the gpl
+variant, encodes a test MP4 with the exact arguments tomviz uses, and that the
+license files made it into the bundle.
+
 ## Manual Build
 
 ```bash

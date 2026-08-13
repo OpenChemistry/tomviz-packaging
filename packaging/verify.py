@@ -15,8 +15,11 @@ import os
 import platform
 import re
 import shutil
+import struct
 import subprocess
 import sys
+import tempfile
+import zlib
 
 
 # Windows system DLLs that ship with the OS and don't need to be bundled.
@@ -74,6 +77,20 @@ SAMPLE_DATA_FILES = [
 # Minimum and maximum expected sizes in MB
 MIN_SIZE_MB = 300
 MAX_SIZE_MB = 8000
+
+
+def write_png(path: str, width: int, height: int,
+              rgb: tuple[int, int, int]) -> None:
+    """Write a solid-color RGB PNG using only the standard library."""
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return (struct.pack(">I", len(data)) + tag + data +
+                struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+
+    raw = b"".join(b"\x00" + bytes(rgb) * width for _ in range(height))
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    with open(path, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) +
+                chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
 class Verifier:
@@ -201,6 +218,89 @@ class Verifier:
                     self.ok(f"tomviz is an ELF executable")
                 else:
                     self.error(f"tomviz is not an ELF executable: {output.strip()}")
+
+    def check_ffmpeg(self) -> None:
+        """Verify the bundled ffmpeg: present, right build, and working.
+
+        tomviz's movie export runs the ffmpeg executable found next to
+        the tomviz binary and encodes H.264 with libx264, which only the
+        conda-forge gpl variant provides. The encode check below mirrors
+        tomviz's exact ffmpeg invocation (MovieExportDialog).
+        """
+        print("\n=== ffmpeg Checks ===")
+
+        is_app_bundle = (self.system == "Darwin" and
+                         os.path.exists(os.path.join(self.install_dir, "Contents")))
+
+        if self.system == "Windows":
+            env_prefix = os.path.join(self.install_dir, "env")
+            ffmpeg = os.path.join(env_prefix, "Library", "bin", "ffmpeg.exe")
+            license_dir = os.path.join(
+                env_prefix, "Library", "share", "licenses", "ffmpeg")
+        elif is_app_bundle:
+            env_prefix = os.path.join(self.install_dir, "Contents", "env")
+            ffmpeg = os.path.join(env_prefix, "bin", "ffmpeg")
+            license_dir = os.path.join(
+                env_prefix, "share", "licenses", "ffmpeg")
+        else:
+            env_prefix = os.path.join(self.install_dir, "env")
+            ffmpeg = os.path.join(env_prefix, "bin", "ffmpeg")
+            license_dir = os.path.join(
+                env_prefix, "share", "licenses", "ffmpeg")
+
+        if not os.path.isfile(ffmpeg):
+            self.error(f"Missing ffmpeg executable: "
+                       f"{os.path.relpath(ffmpeg, self.install_dir)}")
+            return
+        self.ok("Found ffmpeg executable")
+
+        # GPL license text must accompany the GPL binary.
+        gpl_text = os.path.join(license_dir, "COPYING.GPLv2")
+        notice = os.path.join(license_dir, "NOTICE.txt")
+        for path, label in [(gpl_text, "ffmpeg GPL license text"),
+                            (notice, "ffmpeg source-availability notice")]:
+            if os.path.isfile(path):
+                self.ok(f"Found {label}")
+            else:
+                self.error(f"Missing {label}: "
+                           f"{os.path.relpath(path, self.install_dir)}")
+
+        # The right build: gpl variant with libx264 compiled in.
+        result = subprocess.run([ffmpeg, "-version"],
+                                capture_output=True, text=True)
+        if result.returncode != 0:
+            self.error(f"ffmpeg -version failed (exit {result.returncode}): "
+                       f"{result.stderr.strip()[:200]}")
+            return
+        for flag in ["--enable-gpl", "--enable-libx264"]:
+            if flag in result.stdout:
+                self.ok(f"ffmpeg built with {flag}")
+            else:
+                self.error(f"ffmpeg missing {flag} (wrong variant bundled? "
+                           "MP4 export needs the gpl build)")
+                return
+
+        # Functional: encode PNG frames to MP4 exactly like tomviz does.
+        with tempfile.TemporaryDirectory() as tmp:
+            for i in range(8):
+                write_png(os.path.join(tmp, f"frame.{i:06d}.png"),
+                          64, 48, (32 * i % 256, 80, 160))
+            out = os.path.join(tmp, "out.mp4")
+            cmd = [
+                ffmpeg, "-y", "-framerate", "30", "-start_number", "0",
+                "-i", os.path.join(tmp, "frame.%06d.png"),
+                "-c:v", "libx264", "-preset", "medium", "-crf", "23",
+                "-pix_fmt", "yuv420p", "-movflags", "+faststart", out,
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if (result.returncode == 0 and os.path.isfile(out) and
+                    os.path.getsize(out) > 0):
+                self.ok(f"ffmpeg encoded a test MP4 "
+                        f"({os.path.getsize(out)} bytes)")
+            else:
+                self.error("ffmpeg failed to encode a test MP4 "
+                           f"(exit {result.returncode}): "
+                           f"{result.stderr.strip()[-300:]}")
 
     def check_library_deps(self) -> None:
         """Check for missing shared library dependencies."""
@@ -395,6 +495,7 @@ class Verifier:
         self.check_structure()
         self.check_sample_data()
         self.check_binary_type()
+        self.check_ffmpeg()
         self.check_library_deps()
         self.check_prefix_leaks()
         self.check_size()

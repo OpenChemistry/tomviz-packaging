@@ -37,7 +37,10 @@ Version:        %{tomviz_version}
 Release:        %{?tomviz_release}%{!?tomviz_release:1}%{?dist}
 Summary:        3D tomography data processing and visualization
 
-License:        BSD-3-Clause
+# tomviz itself is BSD-3-Clause; the bundle also ships a GPL ffmpeg
+# executable (invoked as a separate process for movie export), with its
+# license texts under share/licenses/ffmpeg/ in the payload.
+License:        BSD-3-Clause AND GPL-2.0-or-later
 URL:            https://tomviz.org
 Vendor:         Kitware, Inc.
 

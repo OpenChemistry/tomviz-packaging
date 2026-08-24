@@ -25,6 +25,12 @@ def main() -> None:
         importlib.import_module(mod)
         print(f"  OK: import {mod}")
 
+    # itk-elastix installs into the itk package itself, so check for the
+    # attribute the Registration operator uses rather than a module.
+    itk = importlib.import_module("itk")
+    getattr(itk, "elastix_registration_method")
+    print("  OK: itk.elastix_registration_method")
+
     print("Python imports OK")
 
 

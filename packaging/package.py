@@ -198,6 +198,42 @@ def cleanup_conda_pack_files(env_dir: str) -> None:
                 print(f"  Removed {os.path.relpath(path, env_dir)}")
 
 
+def conda_pkgs_dirs() -> list[str]:
+    """Locations of the conda package cache, best effort.
+
+    Checks $CONDA_PKGS_DIRS, then asks the solver tool (`info --json`),
+    then falls back to <root>/pkgs. micromamba spells the info key with a
+    space ("pkgs dirs"), so both spellings are read.
+    """
+    dirs = [p for p in
+            os.environ.get("CONDA_PKGS_DIRS", "").split(os.pathsep) if p]
+
+    candidates = ["conda", "mamba", "micromamba"]
+    if platform.system() == "Windows":
+        candidates = ["conda.bat", "mamba.bat"] + candidates
+    for exe in candidates:
+        if not shutil.which(exe):
+            continue
+        result = subprocess.run(
+            [exe, "info", "--json"], capture_output=True, text=True)
+        if result.returncode != 0:
+            continue
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            continue
+        found = data.get("pkgs_dirs") or data.get("pkgs dirs") or []
+        if found:
+            dirs.extend(found)
+            break
+
+    root = os.environ.get("CONDA")  # set by setup-miniconda in CI
+    if root:
+        dirs.append(os.path.join(root, "pkgs"))
+
+    return list(dict.fromkeys(dirs))
+
+
 def install_ffmpeg_licenses(env_dir: str) -> None:
     """Bundle ffmpeg's license files and a source-availability notice.
 
@@ -205,8 +241,14 @@ def install_ffmpeg_licenses(env_dir: str) -> None:
     so redistributing it requires shipping the license text and saying
     where the corresponding source lives. conda does not materialize a
     package's info/licenses into the environment; they stay in the pkgs
-    cache, whose location conda-meta records. This must run before
-    cleanup_bundled_env(), which deletes conda-meta.
+    cache. This must run before cleanup_bundled_env(), which deletes
+    conda-meta.
+
+    conda records the cache location in conda-meta as
+    extracted_package_dir, but mamba/micromamba write a reduced key set
+    without it, so the cache dirs are searched as a fallback. The cache
+    entry's directory name always equals the conda-meta filename
+    (name-version-build), which needs no json keys at all.
     """
     metas = glob.glob(os.path.join(env_dir, "conda-meta", "ffmpeg-*.json"))
     if not metas:
@@ -222,12 +264,30 @@ def install_ffmpeg_licenses(env_dir: str) -> None:
             f"Expected the gpl ffmpeg variant, got build '{build}'. The "
             "lgpl variant lacks libx264, which tomviz's MP4 export uses.")
 
-    src = os.path.join(meta.get("extracted_package_dir", ""),
-                       "info", "licenses")
-    if not os.path.isdir(src):
+    pkg_dirs = []
+    extracted = meta.get("extracted_package_dir", "")
+    if extracted:
+        pkg_dirs.append(extracted)
+    tarball = meta.get("package_tarball_full_path", "")
+    for ext in (".conda", ".tar.bz2"):
+        if tarball.endswith(ext):
+            pkg_dirs.append(tarball[: -len(ext)])
+            break
+    pkg_dirname = os.path.basename(metas[0])[: -len(".json")]
+    for pkgs_dir in conda_pkgs_dirs():
+        pkg_dirs.append(os.path.join(pkgs_dir, pkg_dirname))
+
+    src = None
+    for pkg_dir in pkg_dirs:
+        candidate = os.path.join(pkg_dir, "info", "licenses")
+        if os.path.isdir(candidate):
+            src = candidate
+            break
+    if src is None:
         raise RuntimeError(
-            f"ffmpeg license files not found at {src}; the conda package "
-            "cache may have been cleaned before packaging finished")
+            "ffmpeg license files not found; the conda package cache may "
+            "have been cleaned before packaging finished. Looked in: "
+            + (", ".join(pkg_dirs) or "<no candidate locations>"))
 
     # Unix keeps licenses in share/, the Windows conda layout in Library/.
     share = os.path.join(env_dir, "share")

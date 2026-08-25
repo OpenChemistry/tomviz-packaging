@@ -289,11 +289,14 @@ def install_ffmpeg_licenses(env_dir: str) -> None:
             "have been cleaned before packaging finished. Looked in: "
             + (", ".join(pkg_dirs) or "<no candidate locations>"))
 
-    # Unix keeps licenses in share/, the Windows conda layout in Library/.
-    share = os.path.join(env_dir, "share")
-    if not os.path.isdir(share) and os.path.isdir(
-            os.path.join(env_dir, "Library")):
+    # Unix keeps licenses in share/, the Windows conda layout in
+    # Library/share/. A Windows env usually has a top-level share/ too,
+    # so key on Library's presence (the Windows layout marker), not on
+    # share's absence. verify.py checks the same per-platform paths.
+    if os.path.isdir(os.path.join(env_dir, "Library")):
         share = os.path.join(env_dir, "Library", "share")
+    else:
+        share = os.path.join(env_dir, "share")
     dest = os.path.join(share, "licenses", "ffmpeg")
     if os.path.exists(dest):
         shutil.rmtree(dest)

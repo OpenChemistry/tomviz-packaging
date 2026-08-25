@@ -112,6 +112,14 @@ def create_environment(python_version: str, tomviz_version: str) -> str:
         shutil.rmtree(env_dir)
 
     print(f"Creating environment with tomviz={tomviz_version}, python={python_version}")
+    env = os.environ.copy()
+    if platform.system() == "Linux":
+        # The RPM targets RHEL 8, whose glibc is 2.28. The CI runner's
+        # glibc is much newer, so an unconstrained solve can pick builds
+        # that do not run there (e.g. ffmpeg -> pulseaudio-client ->
+        # libsystemd0 built against glibc 2.32). Pin the virtual package
+        # so the solver only picks RHEL-8-compatible builds.
+        env.setdefault("CONDA_OVERRIDE_GLIBC", "2.28")
     run([
         conda, "create", "-y", "-p", env_dir,
         "-c", "conda-forge",
@@ -127,7 +135,7 @@ def create_environment(python_version: str, tomviz_version: str) -> str:
         # extend to tomviz; its license files are bundled by
         # install_ffmpeg_licenses().
         "ffmpeg=*=gpl_*",
-    ])
+    ], env=env)
 
     # ITK is only available to install from pip. Install it here.
     # itk-elastix provides itk.elastix_registration_method, used by the

@@ -297,18 +297,18 @@ def install_ffmpeg_licenses(env_dir: str) -> None:
     so redistributing it requires shipping the license text and saying
     where the corresponding source lives. conda does not materialize a
     package's info/licenses into the environment; they stay in the pkgs
-    cache. This must run before cleanup_bundled_env(), which deletes
-    conda-meta.
+    cache.
 
-    conda records the cache location in conda-meta as
-    extracted_package_dir, but mamba/micromamba write a reduced key set
-    without it, so the cache dirs are searched as a fallback. The cache
-    entry's directory name always equals the conda-meta filename
-    (name-version-build), which needs no json keys at all. Where it sits
-    inside the cache depends on the tool: conda and mamba < 2.6 use a flat
-    <pkgs_dir>/<name-version-build>, mamba >= 2.6 nests it under the
-    channel and platform (<pkgs_dir>/conda-forge/linux-64/...), so both
-    layouts are searched.
+    This runs on the freshly created env, before conda-pack: conda and
+    mamba both record the cache location in conda-meta as
+    extracted_package_dir, but conda-pack blanks that field (and
+    package_tarball_full_path) when it copies conda-meta into the
+    archive. The files it installs under share/ are unmanaged, which
+    conda-pack carries through into the bundle. Should the recorded
+    location be missing anyway, the cache dirs are searched for the
+    name-version-build directory in both the flat layout (conda, mamba
+    < 2.6) and mamba >= 2.6's URL-derived layout
+    (<pkgs_dir>/https/conda.anaconda.org/conda-forge/linux-64/...).
     """
     metas = glob.glob(os.path.join(env_dir, "conda-meta", "ffmpeg-*.json"))
     if not metas:
@@ -334,11 +334,17 @@ def install_ffmpeg_licenses(env_dir: str) -> None:
             pkg_dirs.append(tarball[: -len(ext)])
             break
     pkg_dirname = os.path.basename(metas[0])[: -len(".json")]
+    # mamba >= 2.6 nests the cache entry under the package URL's directory
+    # with "://" -> "/" and ":" -> "_" (libmamba package_cache.cpp).
+    url_subdir = ""
+    url = meta.get("url", "")
+    if url:
+        url_subdir = url.rsplit("/", 1)[0].replace("://", "/")
+        url_subdir = re.sub(r"[:\\]", "_", url_subdir)
     for pkgs_dir in conda_pkgs_dirs():
         pkg_dirs.append(os.path.join(pkgs_dir, pkg_dirname))
-        # mamba >= 2.6 hierarchical layout: <pkgs_dir>/<channel>/<subdir>/
-        pkg_dirs.extend(sorted(glob.glob(
-            os.path.join(pkgs_dir, "*", "*", pkg_dirname))))
+        if url_subdir:
+            pkg_dirs.append(os.path.join(pkgs_dir, url_subdir, pkg_dirname))
 
     src = None
     for pkg_dir in pkg_dirs:
@@ -396,8 +402,6 @@ def stage_bundled_env(env_dir: str, bundle_env_dir: str) -> None:
     cleanup_conda_pack_files(bundle_env_dir)
     # conda-pack leaves hardcoded build-machine paths in qt.conf; rewrite them.
     fix_qt_conf(bundle_env_dir)
-    # Needs conda-meta, which cleanup_bundled_env() removes later.
-    install_ffmpeg_licenses(bundle_env_dir)
 
 
 def _dir_size(path: str) -> int:
@@ -722,6 +726,8 @@ def main() -> None:
 
     # Step 1: Create conda environment
     env_dir = create_environment(args.python_version, tomviz_version)
+    # Must precede conda-pack, which drops the cache paths from conda-meta.
+    install_ffmpeg_licenses(env_dir)
 
     # Step 2: conda-pack
     archive_path = conda_pack_env(env_dir)

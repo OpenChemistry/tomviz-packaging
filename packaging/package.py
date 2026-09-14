@@ -304,7 +304,11 @@ def install_ffmpeg_licenses(env_dir: str) -> None:
     extracted_package_dir, but mamba/micromamba write a reduced key set
     without it, so the cache dirs are searched as a fallback. The cache
     entry's directory name always equals the conda-meta filename
-    (name-version-build), which needs no json keys at all.
+    (name-version-build), which needs no json keys at all. Where it sits
+    inside the cache depends on the tool: conda and mamba < 2.6 use a flat
+    <pkgs_dir>/<name-version-build>, mamba >= 2.6 nests it under the
+    channel and platform (<pkgs_dir>/conda-forge/linux-64/...), so both
+    layouts are searched.
     """
     metas = glob.glob(os.path.join(env_dir, "conda-meta", "ffmpeg-*.json"))
     if not metas:
@@ -332,6 +336,9 @@ def install_ffmpeg_licenses(env_dir: str) -> None:
     pkg_dirname = os.path.basename(metas[0])[: -len(".json")]
     for pkgs_dir in conda_pkgs_dirs():
         pkg_dirs.append(os.path.join(pkgs_dir, pkg_dirname))
+        # mamba >= 2.6 hierarchical layout: <pkgs_dir>/<channel>/<subdir>/
+        pkg_dirs.extend(sorted(glob.glob(
+            os.path.join(pkgs_dir, "*", "*", pkg_dirname))))
 
     src = None
     for pkg_dir in pkg_dirs:

@@ -19,6 +19,7 @@ import glob
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tarfile
@@ -194,6 +195,53 @@ def fix_qt_conf(env_dir: str) -> None:
                     f.write("[Paths]\n")
                     f.write("Prefix = ..\n")
                 break
+
+
+def fix_fonts_conf(env_dir: str) -> None:
+    """Make etc/fonts/fonts.conf relocatable.
+
+    The conda-forge fontconfig ships fonts.conf with its <dir> (bundled font
+    directories) and <cachedir> entries as absolute paths under the build
+    prefix. We skip conda-unpack, so they are never rewritten and the bundled
+    fonts (DejaVu Sans, Ubuntu, ...) are invisible at runtime. Rewrite the
+    <dir> entries with fontconfig's prefix="relative", which resolves against
+    the directory of fonts.conf itself. <cachedir> does not support that
+    prefix (a relative cachedir is taken relative to the process cwd, and
+    fontconfig would create it there), so the build-prefix <cachedir> is
+    dropped instead; the remaining xdg entry (~/.cache/fontconfig) is the
+    right place for the cache anyway, since the bundle may be read-only.
+
+    The <include>conf.d</include> is already relative, but fontconfig resolves
+    relative includes against FONTCONFIG_PATH and its compiled-in config dir,
+    not the including file (prefix="relative" is not honored on <include>).
+    Without conf.d none of the generic-family aliases load and "sans-serif"
+    matches an arbitrary (often serif) font, so the launcher also sets
+    FONTCONFIG_PATH to the bundle's etc/fonts.
+    """
+    conf_path = os.path.join(env_dir, "etc", "fonts", "fonts.conf")
+    if not os.path.exists(conf_path):
+        return
+    with open(conf_path) as f:
+        text = f.read()
+
+    # The <cachedir> entry identifies the baked-in prefix.
+    m = re.search(r"<cachedir>(/[^<]*)/var/cache/fontconfig</cachedir>", text)
+    if not m:
+        print(f"  WARNING: no build prefix found in "
+              f"{os.path.relpath(conf_path, env_dir)}; left unchanged")
+        return
+    prefix = m.group(1)
+    rel = os.path.relpath(env_dir, os.path.dirname(conf_path))  # "../.."
+
+    fixed, n_dirs = re.subn(
+        rf"<dir>{re.escape(prefix)}/([^<]*)</dir>",
+        rf'<dir prefix="relative">{rel}/\1</dir>', text)
+    fixed, n_cache = re.subn(
+        rf"[ \t]*<cachedir>{re.escape(prefix)}/[^<]*</cachedir>\n", "", fixed)
+    with open(conf_path, "w") as f:
+        f.write(fixed)
+    print(f"  Fixed {os.path.relpath(conf_path, env_dir)} "
+          f"({n_dirs} font dirs made relative, {n_cache} cachedir removed)")
 
 
 def cleanup_conda_pack_files(env_dir: str) -> None:
@@ -611,6 +659,9 @@ def post_process_linux(env_dir: str, tomviz_version: str) -> str:
 
     bundle_env_dir = os.path.join(install_dir, "env")
     stage_bundled_env(env_dir, bundle_env_dir)
+    # Only Linux Qt goes through fontconfig; the launcher pairs this with
+    # FONTCONFIG_FILE / FONTCONFIG_PATH.
+    fix_fonts_conf(bundle_env_dir)
     cleanup_bundled_env(bundle_env_dir)
     install_sample_data(bundle_env_dir)
 

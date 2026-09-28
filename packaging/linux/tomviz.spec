@@ -10,7 +10,7 @@
 # (the SOW requires shipping the .spec):
 #
 #   rpmbuild -bb linux/tomviz.spec \
-#       --define "tomviz_version 2.3.1" \
+#       --define "tomviz_version <version>" \
 #       --define "tomviz_release 1" \
 #       --define "staged_root /abs/path/to/_build/install"
 #

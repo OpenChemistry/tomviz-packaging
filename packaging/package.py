@@ -8,7 +8,7 @@ This script:
 4. Prepares the result for CPack to create the final installer
 
 Usage:
-    python package.py [--python-version 3.13] [--tomviz-version 3.1.0]
+    python package.py [--python-version 3.13] [--tomviz-version <version>]
 """
 
 from __future__ import annotations

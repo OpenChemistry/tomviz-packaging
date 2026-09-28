@@ -10,13 +10,14 @@
 # hence --privileged. On Apple Silicon this runs under linux/amd64 emulation.
 #
 # Usage: build_and_test_flatpak_local.sh [version] [python_version]
+# The version defaults to the newest tomviz on conda-forge for that Python.
 set -euo pipefail
 
-VERSION="${1:-3.1.0}"
 PYVER="${2:-3.13}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+VERSION="${1:-$(python3 "$REPO_ROOT/.github/scripts/latest_conda_forge_tomviz.py" "$PYVER" | cut -d' ' -f1)}"
 STAGED="$REPO_ROOT/packaging/_build/install/tomviz"
 
 echo "Repo:     $REPO_ROOT"

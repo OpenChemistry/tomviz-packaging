@@ -8,7 +8,7 @@ This script:
 4. Prepares the result for CPack to create the final installer
 
 Usage:
-    python package.py [--python-version 3.13] [--tomviz-version <version>]
+    python package.py [--python-version 3.14] [--tomviz-version <version>]
 """
 
 from __future__ import annotations
@@ -705,8 +705,8 @@ def post_process_windows(env_dir: str, tomviz_version: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Package tomviz standalone installers")
-    parser.add_argument("--python-version", default="3.13",
-                        help="Python version (default: 3.13)")
+    parser.add_argument("--python-version", default="3.14",
+                        help="Python version (default: 3.14)")
     parser.add_argument("--tomviz-version", default=None,
                         help="Tomviz version (default: latest on conda-forge)")
     args = parser.parse_args()

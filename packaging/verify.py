@@ -94,7 +94,7 @@ def write_png(path: str, width: int, height: int,
 
 
 class Verifier:
-    def __init__(self, install_dir: str, python_version: str = "3.13") -> None:
+    def __init__(self, install_dir: str, python_version: str = "3.14") -> None:
         self.install_dir: str = os.path.abspath(install_dir)
         self.python_version: str = python_version
         self.errors: list[str] = []
@@ -515,7 +515,7 @@ class Verifier:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify Tomviz standalone install")
     parser.add_argument("install_dir", help="Path to the install directory or .app bundle")
-    parser.add_argument("--python-version", default="3.13")
+    parser.add_argument("--python-version", default="3.14")
     args = parser.parse_args()
 
     verifier = Verifier(args.install_dir, args.python_version)

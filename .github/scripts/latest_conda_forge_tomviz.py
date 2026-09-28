@@ -10,7 +10,7 @@ Usage:
     python latest_conda_forge_tomviz.py <python_version>
 
 Example:
-    python latest_conda_forge_tomviz.py 3.13
+    python latest_conda_forge_tomviz.py 3.14
 """
 
 from __future__ import annotations

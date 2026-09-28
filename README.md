@@ -42,9 +42,9 @@ license files made it into the bundle.
 cd packaging
 conda env create -f environment.yml
 conda activate tomviz-package
-# The newest tomviz on conda-forge for Python 3.13, as CI picks it
-VERSION=$(python ../.github/scripts/latest_conda_forge_tomviz.py 3.13 | cut -d' ' -f1)
-python package.py --tomviz-version "$VERSION" --python-version 3.13
+# The newest tomviz on conda-forge for Python 3.14, as CI picks it
+VERSION=$(python ../.github/scripts/latest_conda_forge_tomviz.py 3.14 | cut -d' ' -f1)
+python package.py --tomviz-version "$VERSION" --python-version 3.14
 TOMVIZ_VERSION="$VERSION" cpack --config CPackConfig.cmake  # .tar.gz / .dmg / .msi
 ```
 
@@ -55,7 +55,7 @@ with `VERSION` set as above:
 
 ```bash
 cd packaging
-python package.py --tomviz-version "$VERSION" --python-version 3.13
+python package.py --tomviz-version "$VERSION" --python-version 3.14
 
 # RPM (relocatable, installs to /opt/tomviz)
 bash linux/build_rpm.sh --staged _build/install --version "$VERSION" --out _build
@@ -69,7 +69,7 @@ configuration files required to rebuild each package (per the NSLS-II SOW).
 
 **Build + test locally via Docker** (handles RHEL containers / flatpak sandbox;
 uses `linux/amd64` emulation on Apple Silicon). Both take an optional version
-and Python version, defaulting to the newest tomviz on conda-forge and 3.13:
+and Python version, defaulting to the newest tomviz on conda-forge and 3.14:
 
 ```bash
 bash packaging/linux/build_and_test_rpm_local.sh          # RPM on Rocky 8 + 9

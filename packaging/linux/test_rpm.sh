@@ -13,7 +13,7 @@ set -euo pipefail
 
 RPM_FILE="${1:?usage: $0 <rpm> [verify.py] [python_version]}"
 VERIFY_PY="${2:-}"
-PYVER="${3:-3.13}"
+PYVER="${3:-3.14}"
 
 PKGMGR="$(command -v dnf || command -v yum)"
 
@@ -24,7 +24,7 @@ echo "############################################################"
 # and a software GL stack from the host side.
 # Host-side runtime deps for the headless smoke test (X server + software GL).
 # Note: we deliberately do NOT rely on a system python3 -- verify.py runs under
-# the bundled Python 3.13 instead (RHEL/Rocky 8's python3 is 3.6, too old).
+# the bundled Python 3.14 instead (RHEL/Rocky 8's python3 is 3.6, too old).
 $PKGMGR install -y \
     xorg-x11-server-Xvfb mesa-dri-drivers mesa-libGL libglvnd-glx \
     libxkbcommon libxkbcommon-x11 fontconfig procps-ng findutils file \
@@ -77,7 +77,7 @@ test -f /usr/share/icons/hicolor/128x128/apps/tomviz.png && echo "OK: icon insta
 
 if [ -n "$VERIFY_PY" ] && [ -f "$VERIFY_PY" ]; then
     echo "--- Structural verification (verify.py) ---"
-    # Use the bundled interpreter (Python 3.13), not the host's: RHEL/Rocky 8
+    # Use the bundled interpreter (Python 3.14), not the host's: RHEL/Rocky 8
     # ship Python 3.6 as system python3, which is too old to even parse
     # verify.py. The bundled python is always present (it is the payload).
     /opt/tomviz/env/bin/python "$VERIFY_PY" /opt/tomviz --python-version "$PYVER"

@@ -15,7 +15,7 @@
 # The version defaults to the newest tomviz on conda-forge for that Python.
 set -euo pipefail
 
-PYVER="${2:-3.13}"
+PYVER="${2:-3.14}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

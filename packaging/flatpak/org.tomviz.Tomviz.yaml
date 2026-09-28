@@ -3,7 +3,7 @@
 # Unlike the old (EOL) Flathub manifest, this does NOT build Tomviz or ParaView
 # from source. It packages the *same* prebuilt, relocatable conda-forge bundle
 # that package.py stages for the tarball and the RPM, copied into /app. This
-# gives us the SOW-required versions (ParaView >=5.12, Qt6, Python 3.13) for
+# gives us the SOW-required versions (ParaView >=5.12, Qt6, Python >=3.12) for
 # free and keeps all three Linux artifacts in lockstep.
 #
 # The bundle is laid out at /app/tomviz (env + launcher), mirroring the tarball

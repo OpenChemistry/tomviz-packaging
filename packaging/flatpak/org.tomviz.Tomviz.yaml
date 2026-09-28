@@ -2,9 +2,8 @@
 #
 # Unlike the old (EOL) Flathub manifest, this does NOT build Tomviz or ParaView
 # from source. It packages the *same* prebuilt, relocatable conda-forge bundle
-# that package.py stages for the tarball and the RPM, copied into /app. This
-# gives us the SOW-required versions (ParaView >=5.12, Qt6, Python >=3.12) for
-# free and keeps all three Linux artifacts in lockstep.
+# that package.py stages for the tarball and the RPM, copied into /app, which
+# keeps all three Linux artifacts in lockstep.
 #
 # The bundle is laid out at /app/tomviz (env + launcher), mirroring the tarball
 # and the /opt RPM, and exposed as /app/bin/tomviz so `flatpak run` finds it.
@@ -33,9 +32,8 @@ finish-args:
   - --device=dri
   # Tiled/DataBroker access and any other beamline network services.
   - --share=network
-  # Dataset access. --filesystem=home covers user data; the NSLS-II beamline
-  # mounts can be added/narrowed here (e.g. --filesystem=/nsls2:ro) once the
-  # DSSI tech rep confirms the mount points.
+  # Dataset access. --filesystem=home covers user data; site data mounts can
+  # be added here (e.g. --filesystem=/nsls2:ro).
   - --filesystem=home
   # GLEW/older GL paths sometimes need this; harmless otherwise.
   - --env=QT_X11_NO_MITSHM=1

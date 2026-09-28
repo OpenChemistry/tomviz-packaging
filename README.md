@@ -65,7 +65,7 @@ bash flatpak/build_flatpak.sh --staged _build/install --version "$VERSION" --out
 ```
 
 The committed `linux/tomviz.spec` and `flatpak/org.tomviz.Tomviz.yaml` are the
-configuration files required to rebuild each package (per the NSLS-II SOW).
+configuration files needed to rebuild each package.
 
 **Build + test locally via Docker** (handles RHEL containers / flatpak sandbox;
 uses `linux/amd64` emulation on Apple Silicon). Both take an optional version

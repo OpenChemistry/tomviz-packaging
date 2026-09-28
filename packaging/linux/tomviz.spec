@@ -6,8 +6,7 @@
 # self-contained conda environment plus a launcher script.
 #
 # Variable bits are passed by build_rpm.sh via --define, so this stays a real,
-# lintable .spec file that can be checked into the repo and handed to NSLS-II
-# (the SOW requires shipping the .spec):
+# lintable .spec file that can be checked into the repo:
 #
 #   rpmbuild -bb linux/tomviz.spec \
 #       --define "tomviz_version <version>" \

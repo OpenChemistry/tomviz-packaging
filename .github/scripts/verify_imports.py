@@ -11,8 +11,7 @@ import importlib
 
 REQUIRED: list[str] = [
     "tomviz",
-    "tomviz.cli",
-    "tomviz._wrapping",
+    "tomviz_pipeline",
     "tomviz._realtime.ctvlib",
     "tomopy",
     "pystackreg",

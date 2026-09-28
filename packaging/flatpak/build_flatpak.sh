@@ -3,7 +3,7 @@
 # bundle (produced by package.py).
 #
 # Usage:
-#   build_flatpak.sh --staged _build/install --version 3.0.0 [--out _build]
+#   build_flatpak.sh --staged _build/install --version 3.1.0 [--out _build]
 #
 # Produces: <out>/org.tomviz.Tomviz-<version>.flatpak
 #

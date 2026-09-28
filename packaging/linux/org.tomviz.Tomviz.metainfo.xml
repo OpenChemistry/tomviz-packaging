@@ -54,6 +54,20 @@
     </screenshots>
     <content_rating type="oars-1.1"/>
     <releases>
+        <release version="3.1.0" date="2026-09-28">
+            <description>
+                <p>New features:</p>
+                <ul>
+                    <li>Live data: Python sources can re-run as new data arrives, so a pipeline follows an experiment while it runs</li>
+                    <li>Fourier-space filtering, including a Fourier peak mask with automatic peak detection</li>
+                    <li>Segmentation and label maps, with a Label Map visualization that shows each label in its own color</li>
+                    <li>Volume rendering: lighting presets, shadows, cut-out and exploded views, and several volumes in one view</li>
+                    <li>Linked slices and a 2D image viewer</li>
+                    <li>A reworked Animation Helper with camera paths, property sweeps and MP4 movie export</li>
+                    <li>Saved pipelines run from the command line with the tomviz-pipeline package</li>
+                </ul>
+            </description>
+        </release>
         <release version="3.0.0" date="2026-07-30">
             <description>
                 <p>New features:</p>

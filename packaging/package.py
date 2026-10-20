@@ -580,6 +580,18 @@ def cleanup_bundled_env(env_dir: str) -> None:
         saved += lib_saved
         print(f"  Removed {count} static/import libraries ({_fmt_size(lib_saved)})")
 
+    # --- Unused NVIDIA NPP libraries ---
+    # libtomo-accel (TomoPy's GPU SIRT/MLEM) links only nppc and nppig;
+    # the other NPP libraries add about 340 MB.
+    npp_unused = ["nppial", "nppicc", "nppidei", "nppif", "nppim", "nppist",
+                  "nppisu", "nppitc", "npps"]
+    count, npp_saved = _remove_files_by_glob(env_dir, [
+        pattern for name in npp_unused
+        for pattern in (f"lib/lib{name}.so*", f"Library/bin/{name}64_*.dll")])
+    if count:
+        saved += npp_saved
+        print(f"  Removed {count} unused NPP libraries ({_fmt_size(npp_saved)})")
+
     # --- Non-essential executables ---
     # bin/ (Linux/macOS): keep tomviz, python, pip, config files, and
     # ffmpeg (tomviz's movie export runs the ffmpeg found next to its

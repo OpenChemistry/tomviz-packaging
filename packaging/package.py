@@ -121,9 +121,7 @@ def create_environment(python_version: str, tomviz_version: str) -> str:
         # libsystemd0 built against glibc 2.32). Pin the virtual package
         # so the solver only picks RHEL-8-compatible builds.
         env.setdefault("CONDA_OVERRIDE_GLIBC", "2.28")
-    run([
-        conda, "create", "-y", "-p", env_dir,
-        "-c", "conda-forge",
+    specs = [
         f"python={python_version}",
         f"tomviz={tomviz_version}",
         "tomopy",
@@ -136,6 +134,26 @@ def create_environment(python_version: str, tomviz_version: str) -> str:
         # extend to tomviz; its license files are bundled by
         # install_ffmpeg_licenses().
         "ffmpeg=*=gpl_*",
+    ]
+    if platform.system() in ("Linux", "Windows"):
+        # The TomoPy operator's "Use GPU (CUDA)" option needs
+        # libtomo-accel, which only the CUDA build of libtomo ships (there
+        # is none for macOS). The CI runners have no GPU, so the solver
+        # would pick the CPU build; override the __cuda virtual package.
+        # 12.9 is the only CUDA version libtomo 1.15.3 is built for. Only
+        # libtomo-accel links the CUDA libraries, so the bundle still runs
+        # on machines without an NVIDIA GPU.
+        env.setdefault("CONDA_OVERRIDE_CUDA", "12.9")
+        specs.append("libtomo=*=cuda*")
+    if platform.system() == "Linux":
+        # With __cuda set, the solver also picks ParaView's viskores CUDA
+        # build, about 300 MB more that tomviz does not use. Windows has
+        # only CPU builds of viskores.
+        specs.append("viskores=*=cpu*")
+    run([
+        conda, "create", "-y", "-p", env_dir,
+        "-c", "conda-forge",
+        *specs,
     ], env=env)
 
     # ITK is only available to install from pip. Install it here.

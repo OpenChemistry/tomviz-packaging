@@ -36,6 +36,17 @@ does not change that). `verify.py` checks the binary is present, is the gpl
 variant, encodes a test MP4 with the exact arguments tomviz uses, and that the
 license files made it into the bundle.
 
+## TomoPy GPU support
+
+The Linux and Windows bundles include the CUDA 12.9 build of libtomo, which
+provides `libtomo-accel` for the TomoPy operator's "Use GPU (CUDA)" option
+(GPU SIRT and MLEM). The build runners have no GPU, so `package.py` sets
+`CONDA_OVERRIDE_CUDA=12.9` for the solve and pins ParaView's viskores to its
+CPU build. Only `libtomo-accel` links the CUDA libraries (NVIDIA NPP), so the
+bundles still run without an NVIDIA GPU; using the option needs an NVIDIA
+driver that supports CUDA 12. There is no CUDA build for macOS. `verify.py`
+checks that `libtomo-accel` and NPP made it into the bundle.
+
 ## Manual Build
 
 ```bash

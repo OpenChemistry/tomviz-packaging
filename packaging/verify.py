@@ -11,6 +11,7 @@ Checks:
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import platform
 import re
@@ -302,6 +303,39 @@ class Verifier:
                            f"(exit {result.returncode}): "
                            f"{result.stderr.strip()[-300:]}")
 
+    def check_tomopy_gpu(self) -> None:
+        """Verify the CUDA build of libtomo was bundled (Linux, Windows).
+
+        The TomoPy operator's "Use GPU (CUDA)" option loads libtomo-accel,
+        which the CPU build of libtomo does not ship. There is no CUDA
+        build for macOS.
+        """
+        print("\n=== TomoPy GPU Checks ===")
+
+        if self.system == "Darwin":
+            self.ok("Skipped on macOS (no CUDA build of libtomo)")
+            return
+
+        env_prefix = os.path.join(self.install_dir, "env")
+        if self.system == "Windows":
+            lib_dir = os.path.join(env_prefix, "Library", "bin")
+            accel = "tomo-accel.dll"
+            npp = "nppc64_*.dll"
+        else:
+            lib_dir = os.path.join(env_prefix, "lib")
+            accel = "libtomo-accel.so"
+            npp = "libnppc.so.*"
+
+        if os.path.isfile(os.path.join(lib_dir, accel)):
+            self.ok(f"Found {accel}")
+        else:
+            self.error(f"Missing {accel}: the CPU build of libtomo was "
+                       "bundled, so TomoPy's GPU option cannot work")
+        if glob.glob(os.path.join(lib_dir, npp)):
+            self.ok("Found the NVIDIA NPP library libtomo-accel links")
+        else:
+            self.error(f"Missing {npp}, which libtomo-accel links")
+
     def check_library_deps(self) -> None:
         """Check for missing shared library dependencies."""
         print("\n=== Library Dependency Checks ===")
@@ -496,6 +530,7 @@ class Verifier:
         self.check_sample_data()
         self.check_binary_type()
         self.check_ffmpeg()
+        self.check_tomopy_gpu()
         self.check_library_deps()
         self.check_prefix_leaks()
         self.check_size()

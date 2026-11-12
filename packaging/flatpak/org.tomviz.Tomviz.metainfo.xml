@@ -54,6 +54,27 @@
     </screenshots>
     <content_rating type="oars-1.1"/>
     <releases>
+        <release version="3.1.1" date="2026-11-12">
+            <description>
+                <p>New features:</p>
+                <ul>
+                    <li>Animated GIF movie export</li>
+                    <li>Fine sampling for volume rendering, and ray jittering now takes effect</li>
+                    <li>Camera paths fly on arcs around the focal point</li>
+                    <li>TomoPy reconstructions and the PyXRF source can be canceled</li>
+                    <li>The Linux and Windows installers include GPU-accelerated TomoPy reconstruction</li>
+                </ul>
+                <p>Fixes:</p>
+                <ul>
+                    <li>Live updates in the reconstructions and the PyXRF source</li>
+                    <li>Remove Bad Pixels finds bad pixels that touch, including at line ends and image edges</li>
+                    <li>Cross-correlation and center-of-mass alignment pad the images instead of wrapping them</li>
+                    <li>Binning scales the voxel spacing</li>
+                    <li>Transform dialogs fit on small, scaled screens</li>
+                    <li>Faster TomoPy GPU reconstruction, with batches retried when the GPU runs out of memory</li>
+                </ul>
+            </description>
+        </release>
         <release version="3.1.0" date="2026-09-28">
             <description>
                 <p>New features:</p>
